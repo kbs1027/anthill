@@ -19,6 +19,8 @@ import { Legend } from './Legend'
 import { applyUpdate, type Bar, mergeLatest, toBar } from './merge'
 
 const MINUTE_UNITS: ReadonlySet<UnitCode> = new Set(['1m', '3m', '5m', '10m', '15m', '30m', '60m', '240m'])
+/** 캔들 한 개의 기본 폭(px). 라이브러리 기본값 6은 몸통이 선처럼 보여 넓힌다. */
+const BAR_SPACING = 10
 
 type Palette = { bg: string; text: string; grid: string; line: string; up: string; down: string; upSoft: string; downSoft: string }
 
@@ -66,9 +68,10 @@ export function CandleChart({ market, unit }: { market: string; unit: UnitCode }
       autoSize: true,
       crosshair: { mode: CrosshairMode.Normal },
       localization: { locale: 'ko-KR' },
-      timeScale: { rightOffset: 6, secondsVisible: false },
+      timeScale: { rightOffset: 6, barSpacing: BAR_SPACING, minBarSpacing: 2, secondsVisible: false },
     })
-    const candles = chart.addSeries(CandlestickSeries, { priceLineVisible: true })
+    // 테두리 없이 몸통을 채운다: 좁아져도 몸통 색이 또렷하다.
+    const candles = chart.addSeries(CandlestickSeries, { priceLineVisible: true, borderVisible: false })
     candles.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.24 } })
     const volume = chart.addSeries(HistogramSeries, { priceScaleId: '', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false })
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } })
@@ -140,7 +143,9 @@ export function CandleChart({ market, unit }: { market: string; unit: UnitCode }
     setLast(null)
     setHover(null)
     setStatus('loading')
-    chart.applyOptions({ timeScale: { timeVisible: MINUTE_UNITS.has(unit) } })
+    // 종목·단위를 바꾸면 앞 화면에서 줄이거나 끌어 놓은 확대·세로 축을 처음 상태로 돌린다.
+    chart.applyOptions({ timeScale: { timeVisible: MINUTE_UNITS.has(unit), barSpacing: BAR_SPACING } })
+    candles.priceScale().applyOptions({ autoScale: true })
 
     const offCandles = stream.onCandles((items) => {
       for (const item of items) {
@@ -158,6 +163,7 @@ export function CandleChart({ market, unit }: { market: string; unit: UnitCode }
         bars.current = withLive(page, market, unit)
         hasMore = page.hasMore
         drawAll(bars.current)
+        chart.timeScale().scrollToRealTime()
         ready = true
         for (const item of pending.splice(0)) apply(item)
         setStatus('ready')
