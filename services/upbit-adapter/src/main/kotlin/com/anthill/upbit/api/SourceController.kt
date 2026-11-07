@@ -5,9 +5,11 @@ import com.anthill.contract.CandleUnit
 import com.anthill.contract.InstrumentId
 import com.anthill.contract.InstrumentInfo
 import com.anthill.contract.Priority
+import com.anthill.contract.StreamStatus
 import com.anthill.contract.TickerSnapshot
 import com.anthill.upbit.rest.HttpUpbitRestClient
 import com.anthill.upbit.rest.UpbitRestClient
+import com.anthill.upbit.stream.StreamControl
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.GetMapping
@@ -20,7 +22,7 @@ import java.time.format.DateTimeParseException
 /** 어댑터 공통 계약의 소스 조회 API (동기). marketdata가 부른다. */
 @RestController
 @RequestMapping("/internal")
-class SourceController(private val rest: UpbitRestClient) {
+class SourceController(private val rest: UpbitRestClient, private val stream: StreamControl) {
 
     @GetMapping("/candles")
     fun candles(
@@ -42,6 +44,9 @@ class SourceController(private val rest: UpbitRestClient) {
 
     @GetMapping("/tickers")
     fun tickers(): List<TickerSnapshot> = rest.tickers()
+
+    @GetMapping("/stream-status")
+    fun streamStatus(): StreamStatus = stream.status
 
     @ExceptionHandler(IllegalArgumentException::class, DateTimeParseException::class)
     fun badRequest(e: RuntimeException): ResponseEntity<Map<String, String?>> = ResponseEntity.badRequest().body(mapOf("error" to e.message))

@@ -34,7 +34,7 @@ class SourceControllerTest {
     }
 
     private val rest = FakeRest(btc)
-    private val mvc = MockMvcBuilders.standaloneSetup(SourceController(rest))
+    private val mvc = MockMvcBuilders.standaloneSetup(SourceController(rest, object : com.anthill.upbit.stream.StreamControl { override fun resubscribe(markets: List<String>) {}; override fun pause(d: java.time.Duration) {}; override val status = com.anthill.contract.StreamStatus(false, null) }))
         .setMessageConverters(JacksonJsonHttpMessageConverter(ContractJson.mapper()))
         .build()
 
