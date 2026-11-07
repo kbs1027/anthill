@@ -1,0 +1,9 @@
+.superpowers/
+.DS_Store
+.idea/
+*.iml
+build/
+.gradle/
+.kotlin/
+node_modules/
+dist/
