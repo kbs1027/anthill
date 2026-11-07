@@ -21,6 +21,8 @@ class FakeSource : SourceClient {
     @Volatile var tickers: List<TickerSnapshot> = emptyList()
     @Volatile var status = StreamStatus(false, null)
     @Volatile var failures = 0
+    /** 설정하면 candles()가 이 래치가 풀릴 때까지 기다린다(동시 실행 시험용). */
+    @Volatile var gate: java.util.concurrent.CountDownLatch? = null
 
     fun put(candles: Collection<Candle>) = candles.forEach { c ->
         val list = data.getOrPut(c.instrument to c.unit) { mutableListOf() }
@@ -34,10 +36,11 @@ class FakeSource : SourceClient {
 
     fun callCount(i: InstrumentId, u: CandleUnit) = calls[i to u]?.get() ?: 0
     fun totalCalls() = calls.values.sumOf { it.get() }
-    fun reset() { data.clear(); calls.clear(); instruments = emptyList(); tickers = emptyList(); status = StreamStatus(false, null); failures = 0 }
+    fun reset() { data.clear(); calls.clear(); instruments = emptyList(); tickers = emptyList(); status = StreamStatus(false, null); failures = 0; gate = null }
 
     override fun candles(instrument: InstrumentId, unit: CandleUnit, to: Instant?, count: Int, priority: Priority): List<Candle> {
         calls.getOrPut(instrument to unit) { AtomicInteger() }.incrementAndGet()
+        gate?.await()
         val list = data[instrument to unit] ?: return emptyList()
         return synchronized(list) { list.filter { to == null || it.start < to }.sortedByDescending { it.start }.take(count) }
     }

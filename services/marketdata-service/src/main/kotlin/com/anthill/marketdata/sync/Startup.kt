@@ -4,6 +4,7 @@ import com.anthill.contract.CandleUnit
 import com.anthill.contract.Priority
 import com.anthill.marketdata.candle.CandleRepository
 import com.anthill.marketdata.candle.CandleSync
+import com.anthill.marketdata.candle.CoverageRepository
 import com.anthill.marketdata.candle.InstrumentRepository
 import com.anthill.marketdata.live.LiveCandleBook
 import com.anthill.marketdata.live.StreamStatusTracker
@@ -16,6 +17,7 @@ import java.util.logging.Logger
 
 /**
  * 시작할 때 소스마다: 종목 목록 → 이번 달(또는 더 이른 이번 주)의 마감 일봉 확보 → 티커 → 스트림 상태.
+ * 꺼져 있던 동안을 장애 구간으로 열어 두고, 스트림 연결 이벤트가 부르는 복구가 그 구간을 채우고 닫는다.
  * 소스(어댑터)가 아직 안 떴으면 [retry]마다 다시 시도한다.
  */
 class Startup(
@@ -28,6 +30,8 @@ class Startup(
     private val sync: CandleSync,
     private val candles: CandleRepository,
     private val clock: Clock,
+    private val outages: OutageLog? = null,
+    private val coverage: CoverageRepository? = null,
     private val retry: Duration = Duration.ofSeconds(5),
 ) {
     private val log = Logger.getLogger(Startup::class.java.name)
@@ -56,6 +60,11 @@ class Startup(
         source.tickers(name).forEach {
             tickers.put(it)
             book.onTicker(it)
+        }
+        // 꺼져 있던 동안은 장애 구간이다. 마지막 확인 구간 끝부터 열고, 연결 이벤트가 부르는 복구가 닫는다.
+        if (outages != null && coverage != null) {
+            val lastVerified = coverage.ends().filterKeys { it.first.source == name }.values.maxOrNull()
+            outages.open(name, lastVerified ?: clock.instant())
         }
         tracker.update(name, source.streamStatus(name))
     }

@@ -25,6 +25,11 @@ import com.anthill.marketdata.live.TickerCache
 import com.anthill.marketdata.live.ViewingTracker
 import com.anthill.marketdata.source.HttpSourceClient
 import com.anthill.marketdata.source.SourceClient
+import com.anthill.marketdata.sync.InitialBackfill
+import com.anthill.marketdata.sync.OutageLog
+import com.anthill.marketdata.sync.ReconcilePlanner
+import com.anthill.marketdata.sync.Reconciler
+import com.anthill.marketdata.sync.Recovery
 import com.anthill.marketdata.sync.Startup
 import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.boot.ApplicationRunner
@@ -53,7 +58,7 @@ data class EventsProperties(val enabled: Boolean = true, val subscribers: List<S
 data class LiveProperties(val closeGrace: Duration = Duration.ofSeconds(10))
 
 @Configuration
-@EnableConfigurationProperties(SourcesProperties::class, EventsProperties::class, LiveProperties::class)
+@EnableConfigurationProperties(SourcesProperties::class, EventsProperties::class, LiveProperties::class, BackfillProperties::class)
 class MarketdataConfig {
 
     @Bean
@@ -114,17 +119,45 @@ class MarketdataConfig {
     @Bean
     fun startup(
         props: SourcesProperties, source: SourceClient, instruments: InstrumentRepository, tickers: TickerCache, book: LiveCandleBook,
-        tracker: StreamStatusTracker, sync: CandleSync, candles: CandleRepository, clock: Clock,
-    ) = Startup(props.sources.keys.toList(), source, instruments, tickers, book, tracker, sync, candles, clock)
+        tracker: StreamStatusTracker, sync: CandleSync, candles: CandleRepository, clock: Clock, outages: OutageLog, coverage: CoverageRepository,
+    ) = Startup(props.sources.keys.toList(), source, instruments, tickers, book, tracker, sync, candles, clock, outages, coverage)
 
     @Bean
+    fun reconciler(
+        sync: CandleSync, coverage: CoverageRepository, instruments: InstrumentRepository, tickers: TickerCache,
+        viewing: ViewingTracker, outages: OutageLog, meter: MeterRegistry, clock: Clock,
+    ) = Reconciler(ReconcilePlanner(), sync, coverage, instruments, tickers, viewing, outages, meter, clock)
+
+    @Bean
+    fun initialBackfill(
+        instruments: InstrumentRepository, coverage: CoverageRepository, sync: CandleSync, tickers: TickerCache, clock: Clock, backfill: BackfillProperties,
+    ) = InitialBackfill(instruments, coverage, sync, tickers, clock, backfill.minuteDays)
+
+    @Bean
+    fun recovery(
+        instruments: InstrumentRepository, coverage: CoverageRepository, sync: CandleSync, reconciler: Reconciler,
+        backfill: InitialBackfill, outages: OutageLog, clock: Clock,
+    ) = Recovery(instruments, coverage, sync, reconciler, backfill, outages, clock)
+
+    /** 시작: 스트림 연결 → 복구, 끊김 → 장애 구간 열기를 걸고, 소스 준비를 시작한다. */
+    @Bean
     @ConditionalOnProperty("anthill.jobs.enabled", havingValue = "true")
-    fun startupRunner(startup: Startup) = ApplicationRunner { Thread.ofVirtual().name("startup").start { startup.run() } }
+    fun startupRunner(startup: Startup, tracker: StreamStatusTracker, recovery: Recovery, outages: OutageLog) = ApplicationRunner {
+        tracker.onDisconnected { source, at -> outages.open(source, at) }
+        tracker.onConnected { source, _ -> Thread.ofVirtual().name("recovery-$source").start { recovery.recoverAll(source) } }
+        Thread.ofVirtual().name("startup").start { startup.run() }
+    }
 }
+
+@ConfigurationProperties("anthill.backfill")
+data class BackfillProperties(val minuteDays: Int = 7)
 
 @Component
 @ConditionalOnProperty("anthill.jobs.enabled", havingValue = "true")
-class LiveTickSchedule(private val publisher: LivePublisher) {
+class LiveTickSchedule(private val publisher: LivePublisher, private val reconciler: Reconciler) {
     @Scheduled(fixedRate = 1000)
     fun tick() = publisher.tick()
+
+    @Scheduled(initialDelay = 5000, fixedDelay = 5000)
+    fun reconcile() = reconciler.runDue()
 }
