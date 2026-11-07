@@ -23,4 +23,11 @@ subprojects {
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
     }
+
+    // 컨테이너 이미지: anthill/<서비스>:dev (docker-compose.full.yml이 쓴다)
+    plugins.withId("org.springframework.boot") {
+        tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("bootBuildImage") {
+            imageName.set("anthill/${project.name}:dev")
+        }
+    }
 }
