@@ -17,7 +17,7 @@ import java.util.logging.Logger
 
 /**
  * 시작할 때 소스마다: 종목 목록 → 이번 달(또는 더 이른 이번 주)의 마감 일봉 확보 → 티커 → 스트림 상태.
- * 꺼져 있던 동안을 장애 구간으로 열어 두고, 스트림 연결 이벤트가 부르는 복구가 그 구간을 채우고 닫는다.
+ * 꺼져 있던 동안을 장애 구간으로 먼저 열어 둔다. 준비가 끝나면 시작 쪽이 복구를 불러 그 구간을 채우고 닫는다.
  * 소스(어댑터)가 아직 안 떴으면 [retry]마다 다시 시도한다.
  */
 class Startup(
@@ -36,11 +36,20 @@ class Startup(
 ) {
     private val log = Logger.getLogger(Startup::class.java.name)
 
-    fun run() = sources.forEach { name ->
+    fun run() {
+        // 어댑터를 기다리기 전에 장애 구간부터 연다. 기다리는 사이 어댑터 알림으로 복구가 먼저 돌아도 그 복구가 닫는다.
+        if (outages != null && coverage != null) {
+            val ends = coverage.ends()
+            sources.forEach { name -> outages.open(name, ends.filterKeys { it.first.source == name }.values.maxOrNull() ?: clock.instant()) }
+        }
+        sources.forEach { prepareWithRetry(it) }
+    }
+
+    private fun prepareWithRetry(name: String) {
         while (true) {
             try {
                 prepare(name)
-                return@forEach
+                return
             } catch (e: Exception) {
                 log.log(Level.WARNING, "source $name not ready, retrying in $retry", e)
                 Thread.sleep(retry)
@@ -60,11 +69,6 @@ class Startup(
         source.tickers(name).forEach {
             tickers.put(it)
             book.onTicker(it)
-        }
-        // 꺼져 있던 동안은 장애 구간이다. 마지막 확인 구간 끝부터 열고, 연결 이벤트가 부르는 복구가 닫는다.
-        if (outages != null && coverage != null) {
-            val lastVerified = coverage.ends().filterKeys { it.first.source == name }.values.maxOrNull()
-            outages.open(name, lastVerified ?: clock.instant())
         }
         tracker.update(name, source.streamStatus(name), clock.instant())
     }

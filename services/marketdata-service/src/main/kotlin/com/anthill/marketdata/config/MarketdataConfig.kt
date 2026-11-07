@@ -145,13 +145,17 @@ class MarketdataConfig {
         backfill: InitialBackfill, outages: OutageLog, clock: Clock,
     ) = Recovery(instruments, coverage, sync, reconciler, backfill, outages, clock)
 
-    /** 시작: 스트림 연결 → 복구, 끊김 → 장애 구간 열기를 걸고, 소스 준비를 시작한다. */
+    /** 시작: 스트림 연결 → 복구, 끊김 → 장애 구간 열기를 걸고, 소스 준비 뒤 복구한다. */
     @Bean
     @ConditionalOnProperty("anthill.jobs.enabled", havingValue = "true")
-    fun startupRunner(startup: Startup, tracker: StreamStatusTracker, recovery: Recovery, outages: OutageLog) = ApplicationRunner {
+    fun startupRunner(startup: Startup, tracker: StreamStatusTracker, recovery: Recovery, outages: OutageLog, props: SourcesProperties) = ApplicationRunner {
         tracker.onDisconnected { source, at -> outages.open(source, at) }
         tracker.onConnected { source, _ -> Thread.ofVirtual().name("recovery-$source").start { recovery.recoverAll(source) } }
-        Thread.ofVirtual().name("startup").start { startup.run() }
+        // 시작 복구는 연결 알림에 기대지 않고 직접 부른다(리스너를 걸기 전에 알림이 먼저 올 수 있다).
+        Thread.ofVirtual().name("startup").start {
+            startup.run()
+            props.sources.keys.forEach { recovery.recoverAll(it) }
+        }
     }
 }
 

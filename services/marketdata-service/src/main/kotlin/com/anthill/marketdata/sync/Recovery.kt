@@ -22,34 +22,62 @@ class Recovery(
     private val backfill: InitialBackfill,
     private val outages: OutageLog,
     private val clock: Clock,
+    private val retryDelay: java.time.Duration = java.time.Duration.ofSeconds(15),
+    private val maxPasses: Int = 10,
 ) {
     private val log = Logger.getLogger(Recovery::class.java.name)
     private val running = ConcurrentHashMap.newKeySet<String>()
 
+    /**
+     * 확인 구간 끝부터 지금까지를 채운다. 실패가 하나라도 있으면 장애 구간을 닫지 않고, 정기 검사를 잠시 돌려준 뒤
+     * [retryDelay] 후 남은 것만 다시 한다([maxPasses]번까지). 그래도 남으면 장애 구간을 닫고 정기 검사에 맡긴다
+     * (거래 정지된 종목 하나 때문에 정기 검사가 영영 멈추지 않도록).
+     */
     fun recoverAll(source: String) {
         if (!running.add(source)) return
         try {
-            reconciler.pause()
-            val now = clock.instant()
-            for (info in instruments.active().filter { it.id.source == source }) {
-                for (u in CandleUnit.entries) {
-                    val to = u.floor(now)
-                    val end = coverage.end(info.id, u)
-                    try {
-                        when {
-                            end == null -> sync.syncBefore(info.id, u, to, Priority.RECOVERY, settledBefore = CandleSync.settledBefore(u, now))
-                            end < to -> sync.syncWindow(info.id, u, end, to, Priority.RECOVERY, audit = true, settledBefore = CandleSync.settledBefore(u, now))
-                        }
-                    } catch (e: Exception) {
-                        log.log(Level.WARNING, "recovery failed for ${info.id} $u", e)
-                    }
+            for (pass in 1..maxPasses) {
+                val failures = try {
+                    reconciler.pause()
+                    recoverPass(source)
+                } finally {
+                    reconciler.resume()
                 }
+                if (failures == 0) break
+                if (pass == maxPasses) {
+                    log.warning("recovery for $source left $failures (instrument, unit) pairs to the reconciler after $maxPasses passes")
+                    break
+                }
+                log.warning("recovery pass $pass for $source had $failures failures, retrying in $retryDelay")
+                Thread.sleep(retryDelay)
             }
             outages.close(source, clock.instant())
         } finally {
-            reconciler.resume()
             running.remove(source)
         }
         backfill.startAsync()
+    }
+
+    /** 한 바퀴. 이미 정착 시점까지 확인한 (종목, 단위)는 건너뛴다. 실패한 수를 돌려준다. */
+    private fun recoverPass(source: String): Int {
+        val now = clock.instant()
+        var failures = 0
+        for (info in instruments.active().filter { it.id.source == source }) {
+            for (u in CandleUnit.entries) {
+                val to = u.floor(now)
+                val settled = CandleSync.settledBefore(u, now)
+                val end = coverage.end(info.id, u)
+                try {
+                    when {
+                        end == null -> sync.syncBefore(info.id, u, to, Priority.RECOVERY, settledBefore = settled)
+                        end < settled -> sync.syncWindow(info.id, u, end, to, Priority.RECOVERY, audit = true, settledBefore = settled)
+                    }
+                } catch (e: Exception) {
+                    failures++
+                    log.log(Level.FINE, "recovery failed for ${info.id} $u", e)
+                }
+            }
+        }
+        return failures
     }
 }

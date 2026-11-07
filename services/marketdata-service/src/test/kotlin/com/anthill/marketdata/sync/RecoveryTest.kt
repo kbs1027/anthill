@@ -34,10 +34,10 @@ class RecoveryTest : PgTest() {
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
     private val gapStart = Instant.parse("2026-11-08T10:15:00Z")
 
-    private fun parts(): Pair<Reconciler, Recovery> {
+    private fun parts(retryDelay: java.time.Duration = java.time.Duration.ofMillis(10)): Pair<Reconciler, Recovery> {
         val reconciler = Reconciler(ReconcilePlanner(), sync, coverage, instruments, TickerCache(), ViewingTracker(clock), outages, SimpleMeterRegistry(), clock)
         val backfill = InitialBackfill(instruments, coverage, sync, TickerCache(), clock, minuteDays = 0)
-        return reconciler to Recovery(instruments, coverage, sync, reconciler, backfill, outages, clock)
+        return reconciler to Recovery(instruments, coverage, sync, reconciler, backfill, outages, clock, retryDelay)
     }
 
     private fun seed() {
@@ -84,5 +84,29 @@ class RecoveryTest : PgTest() {
         first.join(5000)
         val unitsNeedingSync = CandleUnit.entries.count { it.floor(gapStart) < it.floor(now) }
         assertEquals(unitsNeedingSync, source.totalCalls())
+    }
+
+    @Test
+    fun `failed syncs are retried before the outage closes`() {
+        // Task 12 실측: 어댑터 REST가 열리기 전에 복구가 돌아 1,800건이 모두 실패했는데 장애 구간을 닫았다(리뷰 M6).
+        seed()
+        source.put(FakeSource.series(gapStart, 5))
+        outages.open("UPBIT", gapStart)
+        source.candleFailures.set(3)
+        parts().second.recoverAll("UPBIT")
+        assertEquals(0L, jdbc.sql("select count(*) from outage where to_at is null").query(Long::class.java).single())
+        assertEquals(CandleUnit.M1.floor(now), coverage.end(BTC, CandleUnit.M1))
+        assertEquals(5, candles.findRange(BTC, CandleUnit.M1, gapStart, CandleUnit.M1.floor(now)).size)
+    }
+
+    @Test
+    fun `a second recovery right after the first makes no calls`() {
+        seed()
+        source.put(FakeSource.series(gapStart, 5))
+        val recovery = parts().second
+        recovery.recoverAll("UPBIT")
+        val calls = source.totalCalls()
+        recovery.recoverAll("UPBIT")
+        assertEquals(calls, source.totalCalls())
     }
 }
