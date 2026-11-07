@@ -4,10 +4,14 @@ spring:
   threads.virtual.enabled: true
   cloud.gateway.server.webmvc.routes:
     - id: marketdata-api
-      uri: http://localhost:8081
+      uri: ${anthill.marketdata.url}
       predicates:
         - Path=/api/**
 anthill:
+  marketdata.url: http://localhost:8081
+  ws:
+    allowed-origins: [ "*" ]
+    max-subscriptions: 50
   events.subscribers:
     - types: [ "realtime." ]
       url: http://localhost:8081/internal/events
