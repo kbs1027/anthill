@@ -88,7 +88,9 @@ cd frontend && npx vitest run && npx tsc -b
 node scripts/compare-live.mjs --minutes 10
 ```
 
-**운영 지표** (marketdata `/actuator/metrics`): `anthill.reconcile.overdue`(단위별 검사 시한 초과 수, 장애 구간 제외), `anthill.reconcile.lag.seconds`, `anthill.events.dropped`.
+**운영 지표** (marketdata `/actuator/metrics`): `anthill.reconcile.late`(검사 시한을 넘겨 확인한 구간 수, 장애 구간 제외, 시작 이후 누적), `anthill.reconcile.overdue`(지금 시한을 넘긴 수, 순간값), `anthill.reconcile.lag.seconds`, `anthill.events.dropped`.
+
+대조 도구는 값 불일치(`MISMATCH`)와 함께 한 번도 확인하지 않은 (종목, 단위)(`UNCOVERED`), 확인이 시한을 넘긴 것(`OVERDUE`)도 보고하고, 하나라도 있으면 종료 코드 1이다.
 
 ## 알아 둘 것
 
