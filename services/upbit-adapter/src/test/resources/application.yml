@@ -1,0 +1,4 @@
+anthill:
+  stream.enabled: false
+  jobs.enabled: false
+  events.subscribers: []

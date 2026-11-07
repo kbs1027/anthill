@@ -1,0 +1,14 @@
+server.port: 8080
+spring:
+  application.name: edge-gateway
+  threads.virtual.enabled: true
+  cloud.gateway.server.webmvc.routes:
+    - id: marketdata-api
+      uri: http://localhost:8081
+      predicates:
+        - Path=/api/**
+anthill:
+  events.subscribers:
+    - types: [ "realtime." ]
+      url: http://localhost:8081/internal/events
+management.endpoints.web.exposure.include: health,metrics
