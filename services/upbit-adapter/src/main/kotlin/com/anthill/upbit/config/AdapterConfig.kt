@@ -9,6 +9,7 @@ import com.anthill.upbit.rest.HttpUpbitRestClient
 import com.anthill.upbit.rest.RequestBudget
 import com.anthill.upbit.rest.UpbitRestClient
 import com.anthill.upbit.stream.StreamEventBridge
+import com.anthill.upbit.stream.StreamHeartbeat
 import com.anthill.upbit.stream.UpbitStreamClient
 import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.boot.ApplicationRunner
@@ -89,6 +90,16 @@ class AdapterConfig {
             }
         }
     }
+}
+
+/** 5초마다 스트림 상태를 다시 알린다(marketdata가 어댑터가 살아 있는지 판단한다). */
+@Component
+@ConditionalOnProperty("anthill.stream.enabled", havingValue = "true")
+class StreamHeartbeatSchedule(stream: UpbitStreamClient, publisher: EventPublisher, clock: Clock) {
+    private val heartbeat = StreamHeartbeat(stream, publisher, clock)
+
+    @Scheduled(fixedRate = 5000)
+    fun beat() = heartbeat.beat()
 }
 
 @Component

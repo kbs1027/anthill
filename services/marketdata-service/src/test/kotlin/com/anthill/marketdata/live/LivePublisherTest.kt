@@ -21,7 +21,7 @@ class LivePublisherTest {
 
     private val published = mutableListOf<Triple<String, String, Any>>()
     private val clock = Clock.fixed(Instant.parse("2026-11-08T10:00:20Z"), ZoneOffset.UTC)
-    private val book = LiveCandleBook(clock, Duration.ofSeconds(10)) {}
+    private val book = LiveCandleBook(clock, Duration.ofSeconds(10)) { _, _ -> }
     private val tickers = TickerCache()
     private val publisher = LivePublisher(book, tickers, EventPublisher { t, k, p -> published += Triple(t, k, p) }, clock)
 

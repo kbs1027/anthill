@@ -54,7 +54,7 @@ class Startup(
         val today = CandleUnit.DAY.floor(clock.instant())
         val from = minOf(CandleUnit.WEEK.floor(today), CandleUnit.MONTH.floor(today))
         for (info in list) {
-            if (from < today) sync.syncWindow(info.id, CandleUnit.DAY, from, today, Priority.RECOVERY, audit = false)
+            if (from < today) sync.syncWindow(info.id, CandleUnit.DAY, from, today, Priority.RECOVERY, audit = false, settledBefore = CandleSync.settledBefore(CandleUnit.DAY, clock.instant()))
             book.seedClosedDays(info.id, candles.findRange(info.id, CandleUnit.DAY, from, today))
         }
         source.tickers(name).forEach {
@@ -66,6 +66,6 @@ class Startup(
             val lastVerified = coverage.ends().filterKeys { it.first.source == name }.values.maxOrNull()
             outages.open(name, lastVerified ?: clock.instant())
         }
-        tracker.update(name, source.streamStatus(name))
+        tracker.update(name, source.streamStatus(name), clock.instant())
     }
 }

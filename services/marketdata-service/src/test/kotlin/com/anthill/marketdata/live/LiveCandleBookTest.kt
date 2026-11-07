@@ -21,7 +21,11 @@ import kotlin.test.assertTrue
 class LiveCandleBookTest {
 
     private val closed = mutableListOf<Candle>()
-    private val book = LiveCandleBook(Clock.fixed(Instant.parse("2026-11-08T00:00:00Z"), ZoneOffset.UTC), Duration.ofSeconds(10)) { closed += it }
+    private val lates = mutableListOf<Candle>()
+    private val book = bookAt("2026-11-08T00:00:00Z")
+
+    private fun bookAt(now: String) =
+        LiveCandleBook(Clock.fixed(Instant.parse(now), ZoneOffset.UTC), Duration.ofSeconds(10)) { c, late -> if (late) lates += c else closed += c }
     private var seq = 0L
 
     private fun at(s: String) = Instant.parse(s)
@@ -103,15 +107,72 @@ class LiveCandleBookTest {
     }
 
     @Test
-    fun `late authoritative for closed bucket only persists`() {
+    fun `late authoritative for closed bucket is handed on as late`() {
         book.onTrade(trade("2026-11-08T10:00:05Z", "100"))
         book.onTrade(trade("2026-11-08T10:01:05Z", "101"))
         closed.clear(); book.drainUpdates()
-        val late = m1("2026-11-08T10:00:00Z", "100", "100", "100", "100", "1", "100")
+        val late = m1("2026-11-08T10:00:00Z", "100", "100", "100", "100", "2", "200")
         book.onCandle(SourceCandleEvent(late, at("2026-11-08T10:00:05Z"), false))
-        assertEquals(listOf(late), closed)
+        assertEquals(listOf(late), lates)            // 저장소가 확인 전이면 저장하고 화면에 정정으로 보낸다
+        assertEquals(emptyList(), closed)
         assertEquals(at("2026-11-08T10:01:00Z"), book.current(BTC, CandleUnit.M1)!!.start)
-        assertTrue(book.drainUpdates().none { it.unit == CandleUnit.M1 })
+        assertTrue(book.drainUpdates().none { it.unit == CandleUnit.M1 && it.state == CandleState.LIVE })
+    }
+
+    @Test
+    fun `final upbit value arriving after a trade closed the minute is handed on once`() {
+        // 리뷰 C1: 업비트 분봉은 약 3초 간격이라, 다음 분 첫 체결이 먼저 와서 앞 분을 A1으로 닫은 뒤 최종값 A2가 온다.
+        val a1 = m1("2026-11-08T10:00:00Z", "100", "110", "95", "108", "3", "320")
+        book.onCandle(SourceCandleEvent(a1, at("2026-11-08T10:00:57Z"), false))
+        book.onTrade(trade("2026-11-08T10:01:00.200Z", "109"))
+        assertEquals(a1, closed.single { it.unit == CandleUnit.M1 })
+        val a2 = m1("2026-11-08T10:00:00Z", "100", "110", "95", "107", "4", "427")
+        book.onCandle(SourceCandleEvent(a2, at("2026-11-08T10:00:59.900Z"), false))
+        book.onCandle(SourceCandleEvent(a2, at("2026-11-08T10:00:59.900Z"), false))   // 같은 값이 다시 와도 한 번만
+        book.onCandle(SourceCandleEvent(a1, at("2026-11-08T10:00:57Z"), false))       // 마지막으로 닫은 값과 같은 옛 값은 넘기지 않는다
+        assertEquals(listOf(a2), lates)
+    }
+
+    @Test
+    fun `snapshot for an ended bucket never reopens it`() {
+        // 리뷰 I1: 재구독하면 업비트가 모든 단위의 마지막 캔들 스냅숏을 보낸다. 몇 시간 전 캔들일 수 있다.
+        val b = bookAt("2026-11-08T12:00:00Z")
+        val old = m1("2026-11-08T10:00:00Z", "100", "100", "100", "100", "1", "100")
+        b.onCandle(SourceCandleEvent(old, at("2026-11-08T10:00:30Z"), true))
+        assertNull(b.current(BTC, CandleUnit.M1))
+        assertTrue(b.drainUpdates().none { it.unit == CandleUnit.M1 })
+        assertEquals(listOf(old), lates)
+    }
+
+    @Test
+    fun `trade for an ended bucket is ignored`() {
+        val b = bookAt("2026-11-08T12:00:00Z")
+        b.onTrade(trade("2026-11-08T10:00:05Z", "100"))
+        assertNull(b.current(BTC, CandleUnit.M1))
+        assertNull(b.current(BTC, CandleUnit.M60))
+    }
+
+    @Test
+    fun `past day ticker neither opens a day nor replaces the seeded day`() {
+        // 리뷰 I1: 시작할 때 받는 REST 티커는 오늘 거래가 없으면 지난 날짜 일봉을 들고 온다.
+        val b = bookAt("2026-11-08T12:00:00Z")
+        val rest = day("2026-11-07T00:00:00Z", "10", "12", "9", "11", "100", "1000")
+        b.seedClosedDays(BTC, listOf(rest))
+        b.onTicker(ticker(day("2026-11-07T00:00:00Z", "10", "12", "9", "11", "60", "600")))
+        assertNull(b.current(BTC, CandleUnit.DAY))
+        b.onTicker(ticker(day("2026-11-08T00:00:00Z", "11", "13", "10", "12", "5", "60")))
+        assertTrue(Decimals.same(d("105"), b.current(BTC, CandleUnit.WEEK)!!.volume))
+    }
+
+    @Test
+    fun `trade already in the applied upbit value is not added again`() {
+        // 리뷰 I2: 재연결 때 분봉 스냅숏(그 체결 포함) 뒤에 같은 체결의 스냅숏이 처음 보는 순번으로 온다.
+        val up = m1("2026-11-08T10:05:00Z", "100", "100", "100", "100", "5", "500")
+        book.onCandle(SourceCandleEvent(up, at("2026-11-08T10:05:10Z"), true))
+        book.onTrade(trade("2026-11-08T10:05:10Z", "100", "1"))
+        assertTrue(Decimals.same(d("5"), book.current(BTC, CandleUnit.M1)!!.volume))
+        book.onTrade(trade("2026-11-08T10:05:11Z", "100", "1"))
+        assertTrue(Decimals.same(d("6"), book.current(BTC, CandleUnit.M1)!!.volume))
     }
 
     @Test
@@ -134,6 +195,7 @@ class LiveCandleBookTest {
 
     @Test
     fun `week candle is closed days plus ticker day`() {
+        val book = bookAt("2026-11-04T12:00:00Z")   // 티커 일봉은 오늘 것만 받는다
         book.seedClosedDays(BTC, listOf(
             day("2026-11-02T00:00:00Z", "90", "100", "80", "95", "1", "90"),
             day("2026-11-03T00:00:00Z", "95", "130", "94", "120", "2", "230"),

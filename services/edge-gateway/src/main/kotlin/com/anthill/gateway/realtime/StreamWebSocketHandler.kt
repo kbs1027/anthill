@@ -9,25 +9,40 @@ import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator
 import org.springframework.web.socket.handler.TextWebSocketHandler
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.logging.Level
 import java.util.logging.Logger
 
 /**
  * `/ws`. 클라이언트 → {"op":"subscribe"|"unsubscribe","market":"UPBIT:KRW-BTC","unit":"1m"} | {"op":"subscribeTickers"}.
  * 잘못된 요청에는 {"type":"error","message":…}를 보내고 연결은 유지한다.
- * 보내기는 세션별 [ConcurrentWebSocketSessionDecorator]: 느린 클라이언트가 한도를 넘기면 그 연결만 끊긴다(재연결 후 다시 받는다).
+ * 보내기는 세션마다 자기 대기열과 가상 스레드에서 한다. 쓰기가 막힌 클라이언트(잠든 노트북, 가득 찬 TCP 버퍼)가
+ * 보내는 쪽(marketdata 이벤트 처리)과 다른 세션을 붙잡지 않는다. 밀린 메시지가 [maxPending]을 넘으면 그 연결을 끊는다
+ * (메시지를 버리면 마감·정정이 빠진 차트가 남으므로 끊고, 클라이언트는 다시 붙어 최신 구간을 새로 받는다).
  */
 class StreamWebSocketHandler(
     private val registry: SubscriptionRegistry,
     private val sendTimeLimitMs: Int = 5_000,
     private val bufferSizeLimit: Int = 1 shl 20,
+    private val maxPending: Int = 64,
 ) : TextWebSocketHandler() {
+
+    private class Outbox(val session: WebSocketSession, val executor: ExecutorService) {
+        val pending = AtomicInteger()
+    }
+
     private val log = Logger.getLogger(StreamWebSocketHandler::class.java.name)
     private val mapper = ContractJson.mapper()
-    private val sessions = ConcurrentHashMap<String, WebSocketSession>()
+    private val sessions = ConcurrentHashMap<String, Outbox>()
 
     override fun afterConnectionEstablished(session: WebSocketSession) {
-        sessions[session.id] = ConcurrentWebSocketSessionDecorator(session, sendTimeLimitMs, bufferSizeLimit)
+        sessions[session.id] = Outbox(
+            ConcurrentWebSocketSessionDecorator(session, sendTimeLimitMs, bufferSizeLimit),
+            Executors.newSingleThreadExecutor(Thread.ofVirtual().name("ws-send-${session.id}").factory()),
+        )
     }
 
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
@@ -55,19 +70,38 @@ class StreamWebSocketHandler(
 
     override fun afterConnectionClosed(session: WebSocketSession, status: CloseStatus) = forget(session.id)
 
+    /** 막히지 않는다: 세션 대기열에 넣고 바로 돌아온다. */
     fun send(sessionId: String, json: String) {
-        val s = sessions[sessionId] ?: return
+        val out = sessions[sessionId] ?: return
+        if (out.pending.incrementAndGet() > maxPending) {
+            log.fine("session $sessionId is $maxPending messages behind, closing")
+            drop(sessionId, out)
+            return
+        }
         try {
-            s.sendMessage(TextMessage(json))
-        } catch (e: Exception) {
-            log.log(Level.FINE, "closing slow or broken session $sessionId", e)
-            forget(sessionId)
-            runCatching { s.close(CloseStatus.SESSION_NOT_RELIABLE) }
+            out.executor.execute {
+                try {
+                    out.session.sendMessage(TextMessage(json))
+                } catch (e: Exception) {
+                    log.log(Level.FINE, "closing broken session $sessionId", e)
+                    drop(sessionId, out)
+                } finally {
+                    out.pending.decrementAndGet()
+                }
+            }
+        } catch (_: RejectedExecutionException) {
+            // 이미 닫는 중
         }
     }
 
+    private fun drop(sessionId: String, out: Outbox) {
+        forget(sessionId)
+        // 막힌 연결은 닫기도 막힐 수 있어 따로 닫는다.
+        Thread.ofVirtual().start { runCatching { out.session.close(CloseStatus.SESSION_NOT_RELIABLE) } }
+    }
+
     private fun forget(sessionId: String) {
-        sessions.remove(sessionId)
+        sessions.remove(sessionId)?.executor?.shutdownNow()
         registry.remove(sessionId)
     }
 }

@@ -33,6 +33,8 @@ interface StreamControl {
 /**
  * 업비트 웹소켓 하나로 KRW 전 종목을 구독한다. 끊기면 [backoffBase]부터 두 배씩([backoffMax]까지) 기다렸다 다시 연결하고,
  * 연결·끊김은 [StreamListener]로 알린다. 업비트는 바이너리 프레임(UTF-8 JSON)으로 보낸다.
+ * 오류 없이 멈춘 연결(잠자기·NAT·네트워크 변경)은 [idleTimeout] 동안 프레임이 없으면 끊고 다시 연결한다.
+ * KRW 전 종목 티커를 받으므로 정상 연결이면 1초 안에 프레임이 온다.
  */
 class UpbitStreamClient(
     private val listener: StreamListener,
@@ -40,6 +42,7 @@ class UpbitStreamClient(
     private val connect: (WebSocket.Listener) -> CompletableFuture<WebSocket>,
     private val backoffBase: Duration = Duration.ofSeconds(1),
     private val backoffMax: Duration = Duration.ofSeconds(30),
+    private val idleTimeout: Duration = Duration.ofSeconds(15),
 ) : StreamControl, AutoCloseable {
 
     private val log = Logger.getLogger(UpbitStreamClient::class.java.name)
@@ -98,7 +101,13 @@ class UpbitStreamClient(
                     current.end()
                 }
                 if (current.opened) backoff = backoffBase
-                current.closed.await()
+                while (!current.closed.await(1, TimeUnit.SECONDS)) {
+                    if (current.opened && Duration.between(current.lastFrameAt, clock.instant()) > idleTimeout) {
+                        log.warning("no upbit frame for $idleTimeout, reconnecting")
+                        current.socket?.abort()
+                        current.end()
+                    }
+                }
                 session = null
                 if (!running) return
                 if (Duration.between(clock.instant(), pausedUntil) > Duration.ZERO) continue
@@ -124,21 +133,31 @@ class UpbitStreamClient(
         val closed = CountDownLatch(1)
         @Volatile var socket: WebSocket? = null
         @Volatile var opened = false
+        @Volatile var lastFrameAt: Instant = clock.instant()
         private val ended = AtomicBoolean(false)
         private val bytes = ByteArrayOutputStream()
         private val text = StringBuilder()
 
         override fun onOpen(webSocket: WebSocket) {
-            socket = webSocket
-            opened = true
-            webSocket.sendText(UpbitStreamParser.subscribeMessage(markets, ticket()), true)
-            val now = clock.instant()
-            connectedSince = now
-            listener.onConnected(now)
+            // 열리는 도중에 끊기면(pause·감시) 상태가 "연결됨"으로 남지 않게, 열기와 끊기를 같은 잠금으로 묶는다.
+            synchronized(this) {
+                if (ended.get()) {
+                    webSocket.abort()
+                    return
+                }
+                socket = webSocket
+                lastFrameAt = clock.instant()
+                opened = true
+                webSocket.sendText(UpbitStreamParser.subscribeMessage(markets, ticket()), true)
+                val now = clock.instant()
+                connectedSince = now
+                listener.onConnected(now)
+            }
             webSocket.request(1)
         }
 
         override fun onBinary(webSocket: WebSocket, data: java.nio.ByteBuffer, last: Boolean): CompletionStage<*>? {
+            lastFrameAt = clock.instant()
             val chunk = ByteArray(data.remaining())
             data.get(chunk)
             bytes.write(chunk)
@@ -151,6 +170,7 @@ class UpbitStreamClient(
         }
 
         override fun onText(webSocket: WebSocket, data: CharSequence, last: Boolean): CompletionStage<*>? {
+            lastFrameAt = clock.instant()
             text.append(data)
             if (last) {
                 deliver(text.toString())
@@ -170,7 +190,7 @@ class UpbitStreamClient(
             end()
         }
 
-        fun end() {
+        fun end() = synchronized(this) {
             if (!ended.compareAndSet(false, true)) return
             if (opened) {
                 connectedSince = null

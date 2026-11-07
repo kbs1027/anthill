@@ -37,8 +37,8 @@ class Recovery(
                     val end = coverage.end(info.id, u)
                     try {
                         when {
-                            end == null -> sync.syncBefore(info.id, u, to, Priority.RECOVERY)
-                            end < to -> sync.syncWindow(info.id, u, end, to, Priority.RECOVERY, audit = true)
+                            end == null -> sync.syncBefore(info.id, u, to, Priority.RECOVERY, settledBefore = CandleSync.settledBefore(u, now))
+                            end < to -> sync.syncWindow(info.id, u, end, to, Priority.RECOVERY, audit = true, settledBefore = CandleSync.settledBefore(u, now))
                         }
                     } catch (e: Exception) {
                         log.log(Level.WARNING, "recovery failed for ${info.id} $u", e)

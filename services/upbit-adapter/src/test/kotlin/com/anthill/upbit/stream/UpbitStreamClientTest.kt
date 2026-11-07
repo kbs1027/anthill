@@ -75,4 +75,18 @@ class UpbitStreamClientTest {
         eventually { conn.sockets.size == 2 }
         client.close()
     }
+
+    @Test
+    fun `silent connection is dropped and reconnected`() {
+        // 리뷰 I5: 오류 없이 멈춘 연결(잠자기·NAT·와이파이 변경)은 TCP keepalive까지 몇 시간 끊김이 안 잡힌다.
+        val rec = Recorder(); val conn = FakeConnector()
+        val client = UpbitStreamClient(
+            rec, Clock.systemUTC(), conn::connect, backoffBase = Duration.ofMillis(50), backoffMax = Duration.ofMillis(200), idleTimeout = Duration.ofMillis(300),
+        )
+        client.start(listOf("KRW-BTC"))
+        eventually { rec.events == listOf("connected") }
+        eventually(timeoutMs = 3000) { rec.events.take(3) == listOf("connected", "disconnected", "connected") }
+        assertTrue(conn.sockets[0].aborted)
+        client.close()
+    }
 }

@@ -17,22 +17,29 @@ import com.anthill.marketdata.live.TickerCache
 import com.anthill.marketdata.live.ViewingTracker
 import java.time.Clock
 
-class TradeHandler(private val book: LiveCandleBook) : EventHandler<TradeEvent> {
+class TradeHandler(private val book: LiveCandleBook, private val tracker: StreamStatusTracker) : EventHandler<TradeEvent> {
     override val type = EventTypes.MARKET_TRADE
     override val payloadType = TradeEvent::class.java
-    override fun handle(key: String, payload: TradeEvent, envelope: EventEnvelope) = book.onTrade(payload)
+    override fun handle(key: String, payload: TradeEvent, envelope: EventEnvelope) {
+        tracker.touch(payload.instrument.source, envelope.occurredAt)
+        book.onTrade(payload)
+    }
 }
 
-class SourceCandleHandler(private val book: LiveCandleBook) : EventHandler<SourceCandleEvent> {
+class SourceCandleHandler(private val book: LiveCandleBook, private val tracker: StreamStatusTracker) : EventHandler<SourceCandleEvent> {
     override val type = EventTypes.MARKET_CANDLE
     override val payloadType = SourceCandleEvent::class.java
-    override fun handle(key: String, payload: SourceCandleEvent, envelope: EventEnvelope) = book.onCandle(payload)
+    override fun handle(key: String, payload: SourceCandleEvent, envelope: EventEnvelope) {
+        tracker.touch(payload.candle.instrument.source, envelope.occurredAt)
+        book.onCandle(payload)
+    }
 }
 
-class TickerHandler(private val book: LiveCandleBook, private val tickers: TickerCache) : EventHandler<TickerEvent> {
+class TickerHandler(private val book: LiveCandleBook, private val tickers: TickerCache, private val tracker: StreamStatusTracker) : EventHandler<TickerEvent> {
     override val type = EventTypes.MARKET_TICKER
     override val payloadType = TickerEvent::class.java
     override fun handle(key: String, payload: TickerEvent, envelope: EventEnvelope) {
+        tracker.touch(payload.ticker.instrument.source, envelope.occurredAt)
         tickers.put(payload.ticker)
         book.onTicker(payload.ticker)
     }
@@ -41,8 +48,11 @@ class TickerHandler(private val book: LiveCandleBook, private val tickers: Ticke
 class StreamStatusHandler(private val tracker: StreamStatusTracker) : EventHandler<StreamStatusEvent> {
     override val type = EventTypes.MARKET_STREAM_STATUS
     override val payloadType = StreamStatusEvent::class.java
-    override fun handle(key: String, payload: StreamStatusEvent, envelope: EventEnvelope) =
+    override fun handle(key: String, payload: StreamStatusEvent, envelope: EventEnvelope) {
+        // 어댑터는 5초마다 같은 상태를 다시 알린다(연결이면 at = 연결 시각). 받은 시각은 살아 있다는 신호다.
         tracker.update(payload.source, StreamStatus(payload.connected, if (payload.connected) payload.at else null), payload.at)
+        tracker.touch(payload.source, envelope.occurredAt)
+    }
 }
 
 class InstrumentHandler(private val instruments: InstrumentRepository, private val clock: Clock) : EventHandler<InstrumentListEvent> {

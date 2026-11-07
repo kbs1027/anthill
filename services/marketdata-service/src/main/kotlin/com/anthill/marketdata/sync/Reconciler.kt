@@ -17,7 +17,9 @@ import java.util.logging.Logger
 
 /**
  * 정기 정합성 검사. 마감된 캔들을 소스 REST로 다시 받아 맞추고, 확인 구간을 앞으로 민다.
- * 지표: anthill.reconcile.overdue{unit}(장애 구간 제외), anthill.reconcile.lag.seconds{unit}.
+ * 확인 구간이 아예 없는 거래 중 (종목, 단위)(운영 중 새 상장 등)도 처음 200개를 받아 검사 대상에 넣는다.
+ * 지표: anthill.reconcile.overdue{unit}(장애 구간 제외, 순간값), anthill.reconcile.lag.seconds{unit},
+ * anthill.reconcile.late{unit}(검사 시한을 넘겨 확인한 구간 수, 장애 구간 제외, 누적 — 24시간 판정에 쓴다).
  */
 class Reconciler(
     private val planner: ReconcilePlanner,
@@ -33,6 +35,7 @@ class Reconciler(
     private val log = Logger.getLogger(Reconciler::class.java.name)
     private val overdueGauges = CandleUnit.entries.associateWith { u -> meter.gauge("anthill.reconcile.overdue", listOf(io.micrometer.core.instrument.Tag.of("unit", u.code)), AtomicLong())!! }
     private val lagGauges = CandleUnit.entries.associateWith { u -> meter.gauge("anthill.reconcile.lag.seconds", listOf(io.micrometer.core.instrument.Tag.of("unit", u.code)), AtomicLong())!! }
+    private val lateCounters = CandleUnit.entries.associateWith { u -> meter.counter("anthill.reconcile.late", "unit", u.code) }
 
     @Volatile var paused = false
         private set
@@ -44,12 +47,29 @@ class Reconciler(
     fun runDue() {
         if (paused) return
         val now = clock.instant()
-        for (job in planner.due(now, activeEnds(), viewing.viewed(), tickers::amount24h)) {
+        val windows = outages.windows(Instant.EPOCH, now)
+        val ends = activeEnds()
+        for (job in planner.due(now, ends, viewing.viewed(), tickers::amount24h)) {
             if (paused) break
             try {
-                sync.syncWindow(job.instrument, job.unit, job.from, job.to, Priority.RECONCILE, audit = true)
+                sync.syncWindow(job.instrument, job.unit, job.from, job.to, Priority.RECONCILE, audit = true, settledBefore = CandleSync.settledBefore(job.unit, now))
+                val close = job.unit.next(job.from)
+                if (now.isAfter(close.plus(job.unit.reconcileDeadline)) && windows.none { (f, t) -> !close.isBefore(f) && !close.isAfter(t) }) {
+                    lateCounters.getValue(job.unit).increment()
+                }
             } catch (e: Exception) {
                 log.log(Level.WARNING, "reconcile failed for $job", e)
+            }
+        }
+        for (info in instruments.active()) {
+            for (u in CandleUnit.entries) {
+                if (paused) break
+                if ((info.id to u) in ends) continue
+                try {
+                    sync.syncBefore(info.id, u, u.floor(now), Priority.RECONCILE, settledBefore = CandleSync.settledBefore(u, now))
+                } catch (e: Exception) {
+                    log.log(Level.WARNING, "first sync failed for ${info.id} $u", e)
+                }
             }
         }
         val after = clock.instant()

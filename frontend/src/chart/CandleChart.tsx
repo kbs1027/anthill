@@ -203,7 +203,9 @@ export function CandleChart({ market, unit }: { market: string; unit: UnitCode }
       try {
         const page = await fetchCandles(market, unit)
         if (cancelled) return
-        bars.current = mergeLatest(bars.current, withLive(page, market, unit))
+        const merged = mergeLatest(bars.current, withLive(page, market, unit))
+        bars.current = merged.bars
+        if (merged.replaced) hasMore = page.hasMore   // 빈 구간을 버렸으니 과거는 이 페이지 앞부터 다시 받는다
         drawAll(bars.current)
       } catch {
         // 다음 갱신이나 재연결 때 맞춰진다

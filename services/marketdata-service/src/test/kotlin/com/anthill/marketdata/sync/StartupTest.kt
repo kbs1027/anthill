@@ -33,7 +33,7 @@ class StartupTest : PgTest() {
         val clock = Clock.fixed(Instant.parse("2026-11-08T10:00:00Z"), ZoneOffset.UTC)
         val tracker = StreamStatusTracker()
         val startup = Startup(
-            listOf("UPBIT"), source, instruments, TickerCache(), LiveCandleBook(clock, Duration.ofSeconds(10)) {}, tracker,
+            listOf("UPBIT"), source, instruments, TickerCache(), LiveCandleBook(clock, Duration.ofSeconds(10)) { _, _ -> }, tracker,
             sync, candles, clock, retry = Duration.ofMillis(10),
         )
         startup.run()

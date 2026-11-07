@@ -42,7 +42,8 @@ class UpbitStreamParserTest {
 
     @Test
     fun `parses trade timestamp in millis`() {
-        val json = raw("stream-trade.json")
+        // 기록해 둔 메시지는 구독 직후의 스냅숏이라 실시간 메시지로 바꿔 읽는다(스냅숏 체결은 버린다).
+        val json = raw("stream-trade.json").replace("\"SNAPSHOT\"", "\"REALTIME\"")
         val msg = assertIs<UpbitTradeMsg>(UpbitStreamParser.parse(json))
         assertEquals(Instant.ofEpochMilli(number(json, "trade_timestamp").toLong()), msg.trade.tradedAt)
         assertEquals(number(json, "sequential_id").toLong(), msg.trade.sequentialId)
@@ -58,4 +59,13 @@ class UpbitStreamParserTest {
 
     @Test
     fun `unknown type returns null`() = assertNull(UpbitStreamParser.parse("""{"type":"orderbook","code":"KRW-BTC"}"""))
+
+    @Test
+    fun `trade snapshot is dropped`() {
+        // 리뷰 I2: 재연결·재구독 때 오는 체결 스냅숏은 분봉 스냅숏에 이미 들어 있는 체결이다. 처음 보는 순번이라 두 번 더해진다.
+        val snap = """{"type":"trade","code":"KRW-BTC","trade_timestamp":1794071474532,"trade_price":1,"trade_volume":2,"sequential_id":7,"stream_type":"SNAPSHOT"}"""
+        val real = snap.replace("SNAPSHOT", "REALTIME")
+        kotlin.test.assertNull(UpbitStreamParser.parse(snap))
+        kotlin.test.assertNotNull(UpbitStreamParser.parse(real))
+    }
 }

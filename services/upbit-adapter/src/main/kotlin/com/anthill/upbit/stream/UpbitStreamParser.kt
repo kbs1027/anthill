@@ -36,6 +36,8 @@ object UpbitStreamParser {
                     n["stream_type"]?.asString() == "SNAPSHOT",
                 )
             }
+            // 재연결·재구독 때 오는 체결 스냅숏은 같이 오는 분봉 스냅숏에 이미 들어 있다. 처음 보는 순번이라 두 번 더해진다(리뷰 I2).
+            type == "trade" && n["stream_type"]?.asString() == "SNAPSHOT" -> null
             type == "trade" -> UpbitTradeMsg(
                 TradeEvent(
                     UpbitJson.id(market), n["trade_price"].decimalValue(), n["trade_volume"].decimalValue(),

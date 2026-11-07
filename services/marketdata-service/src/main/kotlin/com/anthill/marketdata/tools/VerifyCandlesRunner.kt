@@ -23,6 +23,8 @@ data class VerifyReport(
     val checkedCandles: Int,
     val mismatches: List<String>,
     val outages: List<Pair<Instant, Instant>>,
+    val uncovered: List<String> = emptyList(),
+    val overdue: List<String> = emptyList(),
 )
 
 /** 우리 DB의 마감 캔들을 소스 REST와 직접 대조한다. 검사 시한이 지난 캔들만 본다. */
@@ -36,8 +38,19 @@ class CandleVerifier(
         var windows = 0
         var checked = 0
         val mismatches = ArrayList<String>()
+        val uncovered = ArrayList<String>()
+        val overdue = ArrayList<String>()
+        val outageWindows = outages.windows(Instant.EPOCH, now)
         for ((i, u) in samples) {
-            val end = coverage.end(i, u) ?: continue
+            val end = coverage.end(i, u)
+            if (end == null) {
+                uncovered += "$i ${u.code}"
+                continue
+            }
+            val close = u.next(end)
+            if (now.isAfter(close.plus(u.reconcileDeadline)) && outageWindows.none { (f, t) -> !close.isBefore(f) && !close.isAfter(t) }) {
+                overdue += "$i ${u.code} since $close"
+            }
             val to = minOf(end, u.floor(now.minus(u.reconcileDeadline)))
             val coveredFrom = coverage.coveredStartFor(i, u, to) ?: continue
             val fromSource = source.candles(i, u, to, 200, Priority.BACKFILL)
@@ -53,7 +66,7 @@ class CandleVerifier(
                 if (!a.sameValuesAs(e)) mismatches += "$i ${u.code} ${e.start}: source $e, db $a"
             }
         }
-        return VerifyReport(windows, checked, mismatches, outages.windows(Instant.EPOCH, now))
+        return VerifyReport(windows, checked, mismatches, outageWindows, uncovered, overdue)
     }
 }
 
@@ -74,9 +87,15 @@ class VerifyCandlesRunner(
         val tickers = sources.sources.keys.flatMap { source.tickers(it) }.sortedByDescending { it.accTradePrice24h }
         val ids = (tickers.take(5) + tickers.takeLast(5) + tickers.shuffled().take(5)).map { it.instrument }.distinct()
         val report = CandleVerifier(source, candles, coverage, outages).verify(ids.flatMap { i -> CandleUnit.entries.map { i to it } }, clock.instant())
-        println("checked windows=${report.checkedWindows} candles=${report.checkedCandles} mismatches=${report.mismatches.size}")
+        println(
+            "checked windows=${report.checkedWindows} candles=${report.checkedCandles} mismatches=${report.mismatches.size} " +
+                "uncovered=${report.uncovered.size} overdue=${report.overdue.size}",
+        )
         report.mismatches.forEach { println("MISMATCH $it") }
+        report.uncovered.forEach { println("UNCOVERED $it") }
+        report.overdue.forEach { println("OVERDUE $it") }
         report.outages.forEach { (f, t) -> println("OUTAGE $f .. $t") }
-        exitProcess(SpringApplication.exit(context, { if (report.mismatches.isEmpty()) 0 else 1 }))
+        val ok = report.mismatches.isEmpty() && report.uncovered.isEmpty() && report.overdue.isEmpty()
+        exitProcess(SpringApplication.exit(context, { if (ok) 0 else 1 }))
     }
 }

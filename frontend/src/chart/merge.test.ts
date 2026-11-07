@@ -83,7 +83,17 @@ test('mergeLatest keeps older history and replaces the overlap', () => {
   const T3 = '2026-11-08T10:23:00Z'
   const bars = [toBar(candle(T0, '101')), toBar(candle(T1, '102')), toBar(candle(T2, '103'))]
   const merged = mergeLatest(bars, [toBar(candle(T1, '200')), toBar(candle(T3, '201'))])
-  expect(merged.map((b) => b.raw.time)).toEqual([T0, T1, T3])
-  expect(merged.map((b) => b.raw.close)).toEqual(['101', '200', '201'])
-  expect(mergeLatest(bars, [])).toEqual(bars)
+  expect(merged.replaced).toBe(false)
+  expect(merged.bars.map((b) => b.raw.time)).toEqual([T0, T1, T3])
+  expect(merged.bars.map((b) => b.raw.close)).toEqual(['101', '200', '201'])
+  expect(mergeLatest(bars, []).bars).toEqual(bars)
+})
+
+test('mergeLatest replaces everything when the new page does not reach the old bars', () => {
+  // 리뷰 I7: 밤새 잠든 노트북이 다시 붙으면 최근 200분만 받는다. 이어 붙이면 어젯밤 막대가 오늘 아침 막대에 바로 붙은 채 빈 구간이 영영 안 채워진다.
+  const bars = [toBar(candle(T0, '101')), toBar(candle(T1, '102'))]
+  const later = ['2026-11-09T08:00:00Z', '2026-11-09T08:01:00Z'].map((t) => toBar(candle(t, '300')))
+  const merged = mergeLatest(bars, later)
+  expect(merged.replaced).toBe(true)
+  expect(merged.bars).toEqual(later)
 })

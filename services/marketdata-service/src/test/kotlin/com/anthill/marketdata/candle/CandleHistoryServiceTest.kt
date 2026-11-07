@@ -85,4 +85,15 @@ class CandleHistoryServiceTest : PgTest() {
         assertEquals(50, page.candles.size)
         assertFalse(page.hasMore)
     }
+
+    @Test
+    fun `latest page shows the just closed candle without marking it verified`() {
+        // 리뷰 I4: 10:05:10에 10:04 분봉은 마감 10초째라 확인 구간에 넣지 않지만, 화면에는 보여야 한다.
+        val at = Instant.parse("2026-11-08T10:05:10Z")
+        val series = FakeSource.series(Instant.parse("2026-11-08T10:00:00Z"), 5)
+        source.put(series)
+        val page = CandleHistoryService(candles, coverage, sync, FixedLive(null), Clock.fixed(at, ZoneOffset.UTC)).page(btc, CandleUnit.M1, null, 200)
+        assertEquals(series.map { it.start }, page.candles.map { it.start })
+        assertEquals(Instant.parse("2026-11-08T10:04:00Z"), coverage.end(btc, CandleUnit.M1))
+    }
 }

@@ -38,9 +38,14 @@ export function applyUpdate(bars: Bar[], item: StreamCandleItem): { bars: Bar[];
   return { bars: next, mode: 'reset' }
 }
 
-/** 재연결 뒤 다시 받은 최신 구간으로 겹치는 부분을 갈아 끼운다. 그보다 오래된 bar는 그대로 둔다. */
-export function mergeLatest(bars: Bar[], latest: Bar[]): Bar[] {
-  if (latest.length === 0) return bars
+/**
+ * 재연결 뒤 다시 받은 최신 구간으로 겹치는 부분을 갈아 끼운다. 그보다 오래된 bar는 그대로 둔다.
+ * 새 구간이 기존 마지막 bar까지 닿지 않으면(오래 끊겨 그 사이가 빠짐) 통째로 바꾼다: replaced = true.
+ */
+export function mergeLatest(bars: Bar[], latest: Bar[]): { bars: Bar[]; replaced: boolean } {
+  if (latest.length === 0) return { bars, replaced: false }
   const first = latest[0].time
-  return [...bars.filter((b) => b.time < first), ...latest]
+  const last = bars.at(-1)
+  if (last !== undefined && first > last.time) return { bars: latest, replaced: true }
+  return { bars: [...bars.filter((b) => b.time < first), ...latest], replaced: false }
 }

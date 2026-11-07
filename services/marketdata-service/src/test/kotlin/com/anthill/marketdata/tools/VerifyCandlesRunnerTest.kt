@@ -57,4 +57,13 @@ class VerifyCandlesRunnerTest : PgTest() {
         assertTrue(report.mismatches.isEmpty())
         assertEquals(30, report.checkedCandles)
     }
+
+    @Test
+    fun `reports pairs without coverage and pairs past the deadline`() {
+        // 리뷰 I6·I8: 한 번도 확인하지 않은 (종목, 단위)와 확인이 시한을 넘긴 것도 보고한다.
+        coverage.add(BTC, CandleUnit.M5, Instant.EPOCH, from)            // 마지막 확인 10:00, 지금 12:00 → 시한 지남
+        val report = verifier().verify(listOf(BTC to CandleUnit.M1, BTC to CandleUnit.M5), now)
+        assertEquals(listOf("UPBIT:KRW-BTC 1m"), report.uncovered)
+        assertEquals(listOf("UPBIT:KRW-BTC 5m"), report.overdue.map { it.substringBefore(" since") })
+    }
 }

@@ -32,6 +32,8 @@ import com.anthill.marketdata.sync.Reconciler
 import com.anthill.marketdata.sync.Recovery
 import com.anthill.marketdata.sync.Startup
 import io.micrometer.core.instrument.MeterRegistry
+import org.springframework.beans.factory.ObjectProvider
+import com.anthill.marketdata.candle.CandleChangeSink
 import org.springframework.boot.ApplicationRunner
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -82,8 +84,12 @@ class MarketdataConfig {
         }
 
     @Bean
-    fun closedCandlePersister(candles: CandleRepository, coverage: CoverageRepository) =
-        ClosedCandlePersister(candles, coverage, Executors.newSingleThreadExecutor(Thread.ofVirtual().name("persist-closed").factory()))
+    fun closedCandlePersister(candles: CandleRepository, coverage: CoverageRepository, publisher: ObjectProvider<LivePublisher>) =
+        ClosedCandlePersister(
+            candles, coverage, Executors.newSingleThreadExecutor(Thread.ofVirtual().name("persist-closed").factory()),
+            // 늦게 온 값을 저장하면 화면에 정정으로 보낸다. LivePublisher → book → persister 순환을 지연 조회로 끊는다.
+            CandleChangeSink { i, u, up, del -> publisher.getObject().onCorrected(i, u, up, del) },
+        )
 
     @Bean
     fun liveCandleBook(clock: Clock, props: LiveProperties, persister: ClosedCandlePersister) = LiveCandleBook(clock, props.closeGrace, persister)
@@ -92,7 +98,7 @@ class MarketdataConfig {
     fun tickerCache() = TickerCache()
 
     @Bean
-    fun streamStatusTracker() = StreamStatusTracker()
+    fun streamStatusTracker(clock: Clock) = StreamStatusTracker(clock.instant())
 
     @Bean
     fun viewingTracker(clock: Clock) = ViewingTracker(clock)
@@ -110,7 +116,7 @@ class MarketdataConfig {
         instruments: InstrumentRepository, clock: Clock,
     ): EventInbox {
         val handlers: List<EventHandler<*>> = listOf(
-            TradeHandler(book), SourceCandleHandler(book), TickerHandler(book, tickers), StreamStatusHandler(tracker),
+            TradeHandler(book, tracker), SourceCandleHandler(book, tracker), TickerHandler(book, tickers, tracker), StreamStatusHandler(tracker),
             InstrumentHandler(instruments, clock), ViewingHandler(viewing),
         )
         return EventInbox(handlers, ContractJson.mapper())
@@ -154,9 +160,18 @@ data class BackfillProperties(val minuteDays: Int = 7)
 
 @Component
 @ConditionalOnProperty("anthill.jobs.enabled", havingValue = "true")
-class LiveTickSchedule(private val publisher: LivePublisher, private val reconciler: Reconciler) {
+class LiveTickSchedule(
+    private val publisher: LivePublisher,
+    private val reconciler: Reconciler,
+    private val tracker: StreamStatusTracker,
+    private val clock: Clock,
+) {
     @Scheduled(fixedRate = 1000)
     fun tick() = publisher.tick()
+
+    /** 어댑터는 5초마다 상태를 알린다. 20초 동안 아무 소식이 없으면 끊긴 것으로 보고 장애 구간을 연다(리뷰 I5). */
+    @Scheduled(fixedRate = 5000)
+    fun watchdog() = tracker.expire(clock.instant(), Duration.ofSeconds(20))
 
     @Scheduled(initialDelay = 5000, fixedDelay = 5000)
     fun reconcile() = reconciler.runDue()

@@ -88,11 +88,10 @@ class CandleSyncTest : PgTest() {
     }
 
     @Test
-    fun `only audited syncs push changes to viewers`() {
-        // spec 6절: 마감 캔들을 다시 받아 저장값과 다를 때만 정정이고, 그때만 화면에 다시 보낸다.
-        // 과거 채우기·과거 조회로 처음 저장하는 캔들까지 보내면 시청자에게 수만 건이 쏟아진다(Task 12 실측 1분에 16,181건).
+    fun `backfill and old history loads are not pushed to viewers`() {
+        // spec 6절: 정정만 화면에 다시 보낸다. 과거 채우기·과거 조회로 처음 저장하는 캔들까지 보내면 시청자에게 수만 건이 쏟아진다(Task 12 실측 1분에 16,181건).
         val pushed = ArrayList<Pair<List<Instant>, List<Instant>>>()
-        val s = CandleSync(source, candles, coverage, CandleChangeSink { _, _, up, del -> pushed += up.map { it.start } to del }, correctionLog)
+        val s = syncWith { up, del -> pushed += up.map { it.start } to del }
         source.put(FakeSource.series(t0, 5))
         s.syncBefore(btc, CandleUnit.M1, t(5), Priority.USER)
         s.syncWindow(btc, CandleUnit.M1, t(0), t(5), Priority.BACKFILL, audit = false)
@@ -102,4 +101,37 @@ class CandleSyncTest : PgTest() {
         s.syncWindow(btc, CandleUnit.M1, t(0), t(5), Priority.RECONCILE, audit = true)
         assertEquals(listOf(listOf(t(1)) to emptyList<Instant>()), pushed)
     }
+
+    @Test
+    fun `history load after the coverage end pushes what viewers may have missed`() {
+        // 리뷰 I3: 재시작 동안 열려 있던 차트에는 빈 분이 있다. 다른 사람의 과거 조회가 그 분을 먼저 채우면 복구는 차이를 못 본다.
+        val pushed = ArrayList<Instant>()
+        val s = syncWith { up, _ -> pushed += up.map { it.start } }
+        coverage.add(btc, CandleUnit.M1, Instant.EPOCH, t(2))
+        source.put(FakeSource.series(t0, 5))
+        s.syncBefore(btc, CandleUnit.M1, t(5), Priority.USER)
+        assertEquals(listOf(t(2), t(3), t(4)), pushed)
+    }
+
+    @Test
+    fun `newest unsettled candle is stored but not marked verified`() {
+        // 리뷰 I4: 방금 마감된 캔들은 업비트 쪽에서 아직 진행 중일 수 있다(시계 차이). 저장은 하되 확인 구간에는 넣지 않는다.
+        source.put(FakeSource.series(t0, 5))
+        candles.upsert(listOf(FakeSource.candle(t(4).plusSeconds(0), close = "1")))
+        sync.syncWindow(btc, CandleUnit.M1, t(0), t(5), Priority.RECONCILE, audit = true, settledBefore = t(4))
+        assertEquals(t(4), coverage.end(btc, CandleUnit.M1))
+        assertEquals(listOf(t(0), t(1), t(2), t(3), t(4)), candles.findRange(btc, CandleUnit.M1, t(0), t(5)).map { it.start })
+        assertTrue(candles.findRange(btc, CandleUnit.M1, t(4), t(5)).single().close.compareTo(BigDecimal("1")) != 0)
+    }
+
+    @Test
+    fun `unsettled range never deletes`() {
+        source.put(FakeSource.series(t0, 3))
+        candles.upsert(listOf(FakeSource.candle(t(4))))   // 소스에 아직 안 보이는 방금 마감된 캔들
+        sync.syncWindow(btc, CandleUnit.M1, t(0), t(5), Priority.RECONCILE, audit = true, settledBefore = t(4))
+        assertEquals(listOf(t(0), t(1), t(2), t(4)), candles.findRange(btc, CandleUnit.M1, t(0), t(5)).map { it.start })
+    }
+
+    private fun syncWith(push: (List<com.anthill.contract.Candle>, List<Instant>) -> Unit) =
+        CandleSync(source, candles, coverage, CandleChangeSink { _, _, up, del -> push(up, del) }, correctionLog)
 }
