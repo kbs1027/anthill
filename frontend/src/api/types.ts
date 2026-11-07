@@ -17,7 +17,15 @@ export type CandleDto = {
 
 export type CandlePage = { candles: CandleDto[]; live: CandleDto | null; hasMore: boolean }
 
-export type MarketDto = { market: string; koreanName: string; englishName: string; price: string; changeRate: string; amount24h: string }
+/** 시세(price·changeRate·amount24h)는 marketdata가 막 시작해 티커를 아직 못 받았으면 null이다. */
+export type MarketDto = {
+  market: string
+  koreanName: string
+  englishName: string
+  price: string | null
+  changeRate: string | null
+  amount24h: string | null
+}
 
 export type CandleState = 'live' | 'closed' | 'corrected' | 'removed'
 

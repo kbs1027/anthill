@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { CandleDto, StreamCandleItem } from '../api/types'
-import { applyUpdate, toBar } from './merge'
+import { applyUpdate, mergeLatest, toBar } from './merge'
 import { toChartTime } from './time'
 
 const T0 = '2026-11-08T10:20:00Z'
@@ -77,4 +77,13 @@ test('toBar keeps exact strings in raw and numbers for drawing', () => {
   expect(b.volume).toBe(0.00012345)
   expect(b.raw.close).toBe('108328000.00000000')
   expect(b.time).toBe(toChartTime(T0))
+})
+
+test('mergeLatest keeps older history and replaces the overlap', () => {
+  const T3 = '2026-11-08T10:23:00Z'
+  const bars = [toBar(candle(T0, '101')), toBar(candle(T1, '102')), toBar(candle(T2, '103'))]
+  const merged = mergeLatest(bars, [toBar(candle(T1, '200')), toBar(candle(T3, '201'))])
+  expect(merged.map((b) => b.raw.time)).toEqual([T0, T1, T3])
+  expect(merged.map((b) => b.raw.close)).toEqual(['101', '200', '201'])
+  expect(mergeLatest(bars, [])).toEqual(bars)
 })

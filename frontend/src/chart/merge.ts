@@ -37,3 +37,10 @@ export function applyUpdate(bars: Bar[], item: StreamCandleItem): { bars: Bar[];
   next.splice(at === -1 ? next.length : at, 0, bar)
   return { bars: next, mode: 'reset' }
 }
+
+/** 재연결 뒤 다시 받은 최신 구간으로 겹치는 부분을 갈아 끼운다. 그보다 오래된 bar는 그대로 둔다. */
+export function mergeLatest(bars: Bar[], latest: Bar[]): Bar[] {
+  if (latest.length === 0) return bars
+  const first = latest[0].time
+  return [...bars.filter((b) => b.time < first), ...latest]
+}
