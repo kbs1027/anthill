@@ -16,6 +16,7 @@ class CandleSyncTest : PgTest() {
     @Autowired lateinit var sync: CandleSync
     @Autowired lateinit var candles: CandleRepository
     @Autowired lateinit var coverage: CoverageRepository
+    @Autowired lateinit var correctionLog: CorrectionLog
 
     private val btc = FakeSource.BTC
     private val t0 = Instant.parse("2026-11-05T00:00:00Z")
@@ -84,5 +85,21 @@ class CandleSyncTest : PgTest() {
         source.put(FakeSource.series(t0, 5))
         sync.syncWindow(btc, CandleUnit.M1, t(0), t(5), Priority.BACKFILL, audit = false)
         assertEquals(0L, corrections())
+    }
+
+    @Test
+    fun `only audited syncs push changes to viewers`() {
+        // spec 6절: 마감 캔들을 다시 받아 저장값과 다를 때만 정정이고, 그때만 화면에 다시 보낸다.
+        // 과거 채우기·과거 조회로 처음 저장하는 캔들까지 보내면 시청자에게 수만 건이 쏟아진다(Task 12 실측 1분에 16,181건).
+        val pushed = ArrayList<Pair<List<Instant>, List<Instant>>>()
+        val s = CandleSync(source, candles, coverage, CandleChangeSink { _, _, up, del -> pushed += up.map { it.start } to del }, correctionLog)
+        source.put(FakeSource.series(t0, 5))
+        s.syncBefore(btc, CandleUnit.M1, t(5), Priority.USER)
+        s.syncWindow(btc, CandleUnit.M1, t(0), t(5), Priority.BACKFILL, audit = false)
+        assertEquals(emptyList(), pushed)
+
+        candles.upsert(listOf(FakeSource.candle(t(1), close = "999")))
+        s.syncWindow(btc, CandleUnit.M1, t(0), t(5), Priority.RECONCILE, audit = true)
+        assertEquals(listOf(listOf(t(1)) to emptyList<Instant>()), pushed)
     }
 }

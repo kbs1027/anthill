@@ -54,12 +54,11 @@ class CandleSync(
         candles.upsert(upserted)
         candles.delete(i, u, deleted)
         coverage.add(i, u, from, to)
-        if (upserted.isNotEmpty() || deleted.isNotEmpty()) {
+        // 정정(검사·복구)일 때만 기록하고 화면에 다시 보낸다. 과거 채우기·과거 조회는 처음 저장하는 것이라 정정이 아니다.
+        if (audit && (upserted.isNotEmpty() || deleted.isNotEmpty())) {
             sink.onCorrected(i, u, upserted, deleted)
-            if (audit) {
-                upserted.forEach { corrections.record(if (stored.containsKey(it.start)) "update" else "insert", stored[it.start], it) }
-                deleted.forEach { corrections.record("delete", stored.getValue(it), null) }
-            }
+            upserted.forEach { corrections.record(if (stored.containsKey(it.start)) "update" else "insert", stored[it.start], it) }
+            deleted.forEach { corrections.record("delete", stored.getValue(it), null) }
         }
         return SyncResult(upserted, deleted, reachedStart)
     }
