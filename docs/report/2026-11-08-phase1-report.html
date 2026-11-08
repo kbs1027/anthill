@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>anthill 1단계 결과 보고</title>
+<style>
+:root {
+  --bg: #f4f5f7; --surface: #ffffff; --ink: #15191f; --muted: #5d6572; --line: #e1e4e9;
+  --accent: #1c64d9; --accent-soft: rgba(28, 100, 217, 0.10); --good: #1d7a46; --bad: #c0362c; --warn: #9a5b00;
+  --font: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1015; --surface: #151a21; --ink: #e5e9ef; --muted: #96a0ad; --line: #262d37;
+    --accent: #5b9bff; --accent-soft: rgba(91, 155, 255, 0.14); --good: #4cc483; --bad: #f0645a; --warn: #e2a64a;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.7; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 40px 24px 96px; }
+header { margin-bottom: 40px; }
+.eyebrow { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1.25; margin: 8px 0 12px; }
+h2 { font-size: 26px; line-height: 1.3; margin: 0 0 14px; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { font-family: var(--mono); font-size: 15px; color: var(--accent); font-weight: 600; }
+h3 { font-size: 19px; margin: 32px 0 8px; }
+p { margin: 0 0 12px; max-width: 76ch; }
+.lead { font-size: 18px; max-width: 72ch; }
+section { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px; margin: 0 0 28px; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 14px; margin-top: 16px; }
+nav.toc a { color: var(--accent); text-decoration: none; }
+nav.toc a:hover, nav.toc a:focus-visible { text-decoration: underline; }
+ul, ol { margin: 0 0 12px; padding-left: 1.3em; max-width: 80ch; }
+li { margin: 3px 0; }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--accent-soft); padding: 0.05em 0.35em; border-radius: 4px; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 20px 0 8px; }
+.kpi { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.kpi b { display: block; font-size: 26px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.kpi span { font-size: 13px; color: var(--muted); }
+.tbl { overflow-x: auto; margin: 12px 0 16px; border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.55; min-width: 640px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { background: var(--bg); color: var(--muted); font-weight: 600; font-size: 13.5px; white-space: nowrap; }
+td.num { font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 13.5px; }
+.pass { color: var(--good); font-weight: 700; }
+.fail { color: var(--bad); font-weight: 700; }
+.open { color: var(--warn); font-weight: 700; }
+figure { margin: 12px 0 20px; }
+figure img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+figcaption { font-size: 13.5px; color: var(--muted); margin-top: 6px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.pair figure { margin: 0; }
+.mobile img { max-width: 360px; }
+pre { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px; overflow-x: auto; white-space: pre; margin: 8px 0 16px; }
+.note { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; color: var(--muted); font-size: 14.5px; }
+footer { font-size: 13.5px; color: var(--muted); }
+@media (max-width: 760px) {
+  .wrap { padding: 24px 16px 64px; }
+  section { padding: 18px; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pair { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">anthill · 1단계 결과 보고 · 2026-11-08 · 브랜치 phase1-chart (PR #1)</div>
+  <h1>업비트와 같은 캔들 차트를 만들었고, 실제 화면으로 확인했다</h1>
+  <p class="lead">일반인을 위한 모의 투자 서비스 anthill의 첫 단계는 차트다. 업비트와 11개 단위 모두에서 마감 캔들이 값까지 같고, 진행 중 캔들은 체결이 있는 초마다 움직인다. 아래 숫자와 화면은 모두 업비트 실데이터로 돌아가는 전체 스택에서 직접 측정하고 캡처한 것이다.</p>
+  <nav class="toc" aria-label="목차">
+    <a href="#summary">한눈에 보기</a><a href="#goal">배경과 목표</a><a href="#e2e">E2E 시연</a><a href="#arch">아키텍처</a><a href="#tech">기술 선택</a><a href="#data">외부 데이터</a><a href="#design">정확도 설계</a><a href="#verify">검증 결과</a><a href="#review">검토와 개선</a><a href="#next">남은 일</a><a href="#ask">여쭙고 싶은 점</a>
+  </nav>
+</header>
+
+<section id="summary">
+  <h2><span class="n">01</span>한눈에 보기</h2>
+  <div class="kpis">
+    <div class="kpi"><b>0 / 28,446</b><span>마감 캔들 불일치 (11시간 운영 시점, 업비트 REST 대조)</span></div>
+    <div class="kpi"><b>0.69초</b><span>업비트 갱신이 우리 화면에 닿는 최대 지연 (330건, 목표 2초)</span></div>
+    <div class="kpi"><b>9 / 9</b><span>실제 화면 E2E 시나리오 통과</span></div>
+    <div class="kpi"><b>5분</b><span>맥이 8시간 34분 잠든 뒤 빈 구간을 다 채운 시간</span></div>
+  </div>
+  <ul>
+    <li><b>만든 것</b>: 서비스 3개(업비트 어댑터, 시세 서비스, 게이트웨이), 공유 라이브러리 2개, React 차트 화면. 테스트는 백엔드 147개와 프론트 25개가 통과한다.</li>
+    <li><b>화면 = 업비트</b>: 업비트 화면이 가리킨 14:36 캔들을 우리 화면에서도 가리켰다. 시가·고가·저가·종가·거래량·거래대금 6개가 업비트 화면, 업비트 REST와 모두 같았다.</li>
+    <li><b>E2E가 결함을 찾았다</b>: 거래가 많은 토요일 오후의 실시간 비교에서 마감 값 23건 중 1건이 어긋났다. 분을 닫을 때 마지막 체결 몇 건이 빠졌던 것이고, 고친 뒤 다시 잰 결과는 24건 모두 일치했다.</li>
+    <li><b>남은 것</b>: 맥이 잠들어 이번 운영은 24시간 연속이 되지 못했다. 잠들지 않는 환경에서 다시 돌려야 하고, 장애 구간 밖에서 나온 시한 초과 17건의 원인도 확인해야 한다.</li>
+  </ul>
+</section>
+
+<section id="goal">
+  <h2><span class="n">02</span>배경과 목표</h2>
+  <p>anthill은 일반인이 가상자금으로 주요 주식과 코인을 사고파는 공개 모의 투자 서비스다. 최종 차별점은 캔들에 마우스를 올리면 그 시간대 커뮤니티 반응을 종합해 보여 주는 것이다. 커뮤니티 데이터는 제휴와 법률 검토가 필요해 마지막 단계로 미뤘다.</p>
+  <p>차트를 먼저 한 이유는 차트가 틀리면 그 위에 얹을 모의 체결, 수익률, 커뮤니티 반응이 모두 신뢰를 잃기 때문이다. 그래서 성공 기준은 하나다. 업비트 화면의 캔들과 시가·고가·저가·종가·거래량이 시간 단위와 무관하게 정확히 일치해야 한다.</p>
+  <ul>
+    <li>범위: 업비트 원화 마켓 전체(300종목), 11개 단위(1·3·5·10·15·30·60·240분, 일·주·월). 최소 단위는 1분이고 초봉은 만들지 않는다.</li>
+    <li>진행 중 캔들은 1초마다 갱신한다. 그 1초에 체결이 없으면 보내지 않는다.</li>
+    <li>절대 안 되는 것: 숫자가 다른 마감 캔들이 화면에 남는 것, 업비트에 있는 캔들이 빠지는 것, 거래 없는 분을 임의 값으로 채우는 것, 진행 중 캔들이 오래된 정보로 뒤로 줄어드는 것, 같은 체결을 두 번 반영하는 것.</li>
+    <li>로드맵: 차트 → 주문·체결 → 포트폴리오 → 회원 → 확장(보조지표·랭킹) → 커뮤니티 반응.</li>
+  </ul>
+</section>
+
+<section id="e2e">
+  <h2><span class="n">03</span>E2E 시연: 실제 화면으로 확인한 결과</h2>
+  <p>업비트 실데이터로 돌아가는 전체 스택(브라우저 → 게이트웨이 → 시세 서비스 → 어댑터 → 업비트)을 실제 사용자처럼 조작했다. 9개 시나리오가 모두 기대대로 동작했다.</p>
+  <p class="note">캡처: 2026-11-08 15:17~15:23 KST(토요일 오후). <code>scripts/e2e-capture.mjs</code>가 헤드리스 Chrome을 조작해 단계마다 화면을 남기고, 화면에 보인 값을 업비트 REST와 자동으로 대조한다. 업비트 화면은 같은 시각 upbit.com에서 캡처했다.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>#</th><th>시나리오</th><th>한 일</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>첫 화면</td><td>접속</td><td>KRW-BTC 1분봉과 300종목 목록(24시간 거래대금 순) <span class="pass">통과</span></td></tr>
+      <tr><td>2</td><td>실시간 갱신</td><td>진행 중 캔들 지켜보기</td><td>4.1초 만에 종가 103,363,000 → 103,368,000, 거래량 0.11534321 → 0.11631062 <span class="pass">통과</span></td></tr>
+      <tr><td>3</td><td>업비트와 같은 캔들</td><td>14:36 캔들을 십자선으로 가리킴</td><td>6개 값 모두 업비트 화면·REST와 같음 <span class="pass">통과</span></td></tr>
+      <tr><td>4</td><td>단위 전환</td><td>일봉·주봉 선택</td><td>일봉 2026-11-08, 주봉 2026-11-02(월) 시작 <span class="pass">통과</span></td></tr>
+      <tr><td>5</td><td>과거 스크롤</td><td>1분봉을 왼쪽 끝까지 줄임</td><td>이전 200개를 요청(<code>to=2026-11-08T03:02:00Z</code>)해 앞에 붙임 <span class="pass">통과</span></td></tr>
+      <tr><td>6</td><td>검색</td><td>"이더" 입력</td><td>이더리움 등 6종목 <span class="pass">통과</span></td></tr>
+      <tr><td>7</td><td>거래 드문 종목</td><td>KRW-USDG 1분봉</td><td>빈 분을 건너뛰고 붙여 그림, 업비트와 같은 모양 <span class="pass">통과</span></td></tr>
+      <tr><td>8</td><td>재연결</td><td>게이트웨이를 20초 멈춘 뒤 다시 띄움</td><td>다시 띄운 지 10초 만에 갱신 재개 <span class="pass">통과</span></td></tr>
+      <tr><td>9</td><td>휴대폰 폭</td><td>390px 화면</td><td>가로 스크롤 없음 <span class="pass">통과</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>1. 첫 화면</h3>
+  <p>접속하면 KRW-BTC 1분봉이 열리고, 오른쪽에 300종목이 24시간 거래대금 순으로 나온다. 상승은 빨강, 하락은 파랑(국내 관례)이다. 범례의 숫자는 서버가 준 문자열을 그대로 보여 준다.</p>
+  <figure><img src="2026-11-08-e2e/01-first-screen.png" alt="anthill 첫 화면: 비트코인 1분봉과 종목 목록"><figcaption>15:18 KST · KRW-BTC 1분봉, 종목 300개</figcaption></figure>
+
+  <h3>2. 실시간 갱신</h3>
+  <p>같은 15:22 캔들을 두 번 캡처했다. 체결이 들어오자 4.1초 만에 종가와 거래량이 바뀌었다. 체결이 없는 초에는 값이 그대로다(업비트도 같다).</p>
+  <div class="pair">
+    <figure><img src="2026-11-08-e2e/02-live-a.png" alt="갱신 전 15:22 캔들"><figcaption>전: 종 103,363,000 · 거래량 0.11534321</figcaption></figure>
+    <figure><img src="2026-11-08-e2e/03-live-b.png" alt="갱신 후 15:22 캔들"><figcaption>4.1초 뒤: 종 103,368,000 · 거래량 0.11631062</figcaption></figure>
+  </div>
+
+  <h3>3. 업비트 화면과 같은 캔들</h3>
+  <p>업비트 화면에서 십자선이 가리킨 14:36 캔들을 우리 화면에서도 가리켰다. 업비트 화면에는 거래대금이 없어 REST로 확인했다. 자릿수만 다르고 값은 모두 같다.</p>
+  <div class="pair">
+    <figure><img src="2026-11-08-e2e/04-crosshair.png" alt="우리 화면에서 14:36 캔들을 가리킨 모습"><figcaption>우리 화면 · 14:36 캔들</figcaption></figure>
+    <figure><img src="2026-11-08-e2e/upbit-btc-1m-1436.png" alt="업비트 화면에서 14:36 캔들을 가리킨 모습"><figcaption>업비트 화면 · 같은 14:36 캔들</figcaption></figure>
+  </div>
+  <div class="tbl"><table>
+    <thead><tr><th>값</th><th>우리 화면</th><th>업비트 화면</th><th>업비트 REST</th></tr></thead>
+    <tbody>
+      <tr><td>시가</td><td class="num">103,602,000</td><td class="num">103,602,000</td><td class="num">103602000.00000000</td></tr>
+      <tr><td>고가</td><td class="num">103,602,000</td><td class="num">103,602,000</td><td class="num">103602000.00000000</td></tr>
+      <tr><td>저가</td><td class="num">103,550,000</td><td class="num">103,550,000</td><td class="num">103550000.00000000</td></tr>
+      <tr><td>종가</td><td class="num">103,601,000</td><td class="num">103,601,000</td><td class="num">103601000.00000000</td></tr>
+      <tr><td>거래량</td><td class="num">0.09093708</td><td class="num">0.09093708</td><td class="num">0.09093708</td></tr>
+      <tr><td>거래대금</td><td class="num">9,421,206.50528</td><td>(표시 없음)</td><td class="num">9421206.50528000</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>4. 단위 전환</h3>
+  <p>일봉은 09:00 KST(UTC 00:00)에, 주봉은 월요일에 시작한다. 진행 중인 일·주봉도 1분봉과 같은 메시지로 함께 움직인다.</p>
+  <div class="pair">
+    <figure><img src="2026-11-08-e2e/05-unit-day.png" alt="일봉"><figcaption>일봉 · 오늘(2026-11-08) 캔들 진행 중</figcaption></figure>
+    <figure><img src="2026-11-08-e2e/06-unit-week.png" alt="주봉"><figcaption>주봉 · 2026-11-02(월) 시작</figcaption></figure>
+  </div>
+
+  <h3>5. 과거 스크롤</h3>
+  <p>처음에는 최근 200개만 받는다. 왼쪽 끝 가까이 가면 이전 200개를 받아 앞에 붙이고, 보던 자리는 그대로다. 미리 받지 않은 구간은 그때 업비트에서 받아 맞춘다.</p>
+  <figure><img src="2026-11-08-e2e/07-history-scroll.png" alt="줄여서 과거 구간까지 본 1분봉"><figcaption>11:00~15:19 · 이전 페이지 요청 <code>to=2026-11-08T03:02:00Z</code></figcaption></figure>
+
+  <h3>6. 검색</h3>
+  <p>한글명·영문명·코드 어느 쪽으로도 찾는다.</p>
+  <figure><img src="2026-11-08-e2e/08-search.png" alt="'이더' 검색 결과"><figcaption>"이더" → 6종목</figcaption></figure>
+
+  <h3>7. 거래가 드문 종목: 업비트와 비교</h3>
+  <p>KRW-USDG는 거래가 가장 적은 종목이다. 업비트도 우리도 거래 없는 분을 건너뛰고 붙여 그리며, 11/6 20:12의 급락 꼬리가 같은 자리에 있다. 업비트 웹 차트가 빈 분을 어떻게 그리는지는 설계 때 열어 둔 질문이었고, 이 비교로 닫았다.</p>
+  <div class="pair">
+    <figure><img src="2026-11-08-e2e/09-sparse-usdg.png" alt="우리 화면의 KRW-USDG 1분봉"><figcaption>우리 화면 · KRW-USDG 1분봉</figcaption></figure>
+    <figure><img src="2026-11-08-e2e/upbit-usdg-1m.png" alt="업비트 화면의 KRW-USDG 1분봉"><figcaption>업비트 화면 · KRW-USDG 1분봉</figcaption></figure>
+  </div>
+
+  <h3>8. 재연결</h3>
+  <p>게이트웨이를 15:19:27에 멈추자 화면은 마지막 값에서 멈췄다. 15:19:48에 다시 띄우자 15:19:58에 갱신이 다시 들어왔다. 화면은 다시 붙으면서 최신 구간을 새로 받아, 끊긴 동안의 체결까지 맞췄다(거래량 2,327.99766859 → 34,112.85036357).</p>
+  <div class="pair">
+    <figure><img src="2026-11-08-e2e/10-reconnect-during.png" alt="게이트웨이가 멈춘 동안의 화면"><figcaption>멈춘 동안(20초째) · 값이 그대로</figcaption></figure>
+    <figure><img src="2026-11-08-e2e/11-reconnect-after.png" alt="다시 띄운 뒤의 화면"><figcaption>다시 띄운 지 10초 · 갱신 재개</figcaption></figure>
+  </div>
+
+  <h3>9. 휴대폰 폭</h3>
+  <p>390px 폭에서는 차트 아래에 종목 목록이 오고, 가로 스크롤이 생기지 않는다.</p>
+  <figure class="mobile"><img src="2026-11-08-e2e/12-mobile.png" alt="휴대폰 폭 화면"><figcaption>390 × 844</figcaption></figure>
+</section>
+
+<section id="arch">
+  <h2><span class="n">04</span>아키텍처</h2>
+  <p>도메인별 서비스 3개로 나누고, 브라우저는 게이트웨이 하나로만 들어온다. 요청은 아래로(동기), 시세 이벤트는 위로(비동기) 흐른다. 이벤트 형식(봉투·키·eventId)은 처음부터 Kafka 기준이라 나중에는 전송만 바꾸면 되고, 주식은 같은 이벤트를 보내는 어댑터를 추가하면 붙는다.</p>
+  <figure><img src="2026-11-08-e2e/diagram-architecture.png" alt="서비스 구성과 동기·비동기 통신"><figcaption>1단계 서비스 구성 · 실선은 동기 요청, 점선은 비동기 이벤트</figcaption></figure>
+</section>
+
+<section id="tech">
+  <h2><span class="n">05</span>기술 선택: 무엇을, 어디에, 왜</h2>
+  <p>백엔드는 Kotlin + Spring(사용자 결정)이고, 나머지는 "최신 LTS, 없으면 최신 정식 버전"으로 골랐다(기준일 2026-11-07). 고를 때의 기준은 정확도(숫자·시간이 어긋나지 않을 것)와, 주식·Kafka로 넓힐 때 고칠 곳이 적을 것이다.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>기술 (버전)</th><th>쓴 곳</th><th>고른 이유</th><th>대신하지 않은 것</th></tr></thead>
+    <tbody>
+      <tr><td>Kotlin 2.3 + Spring Boot 4.1, JDK 25</td><td>서비스 3개 전부</td><td>언어는 사용자 결정. Boot 4.1은 최신 정식, JDK 25는 2031-09까지 지원하는 LTS</td><td>—</td></tr>
+      <tr><td>도메인별 서비스 3개</td><td>전체 구조</td><td>업비트의 형식·호출 한도를 어댑터 안에 가둠. 주식은 어댑터만 더하면 되고, 단계별로 따로 배포할 수 있음</td><td>앱 하나: 소스가 늘 때마다 시세 로직이 바뀜</td></tr>
+      <tr><td>Spring MVC + 가상 스레드</td><td>세 서비스의 HTTP·이벤트 처리, 업비트 웹소켓 수신, 세션별 전송 대기열</td><td>연결마다 스레드를 싸게 쓰면서 코드는 순서대로 읽힘</td><td>WebFlux(리액티브): 디버깅·학습 비용</td></tr>
+      <tr><td>이벤트 봉투 + HTTP 묶음 전송</td><td>서비스 사이 비동기(시세 이벤트, 1초 차트 갱신, 보는 종목)</td><td>지금은 REST, 나중 Kafka(사용자 결정). eventId·key를 처음부터 Kafka 기준으로 만들고 eventId로 중복을 걸러냄</td><td>지금 Kafka: 1단계에는 운영 부담만 늘어남</td></tr>
+      <tr><td>java.net.http (HttpClient·WebSocket)</td><td>업비트 REST·웹소켓, 서비스 간 호출</td><td>JDK 내장이라 의존성이 없고, 업비트의 바이너리 프레임을 그대로 받음</td><td>별도 HTTP 라이브러리</td></tr>
+      <tr><td>PostgreSQL 18, NUMERIC 컬럼</td><td>마감 캔들, 확인 구간, 정정 기록, 장애 구간</td><td>업비트는 같은 값을 자릿수만 다르게 준다. 십진수를 정확히 저장하고 값 기준으로 비교</td><td>double: 끝자리가 바뀜</td></tr>
+      <tr><td>JdbcClient + Flyway</td><td>시세 서비스 저장소</td><td>구간 병합·잠금 SQL을 직접 보고 쓰고, 스키마는 버전으로 관리</td><td>JPA: 쿼리가 감춰짐</td></tr>
+      <tr><td>Spring Cloud Gateway Server MVC + 순수 WebSocket(JSON)</td><td>게이트웨이: /api 라우팅, /ws 허브</td><td>라우팅과 실시간 허브를 한 앱에. 구독·푸시만 필요해 프로토콜을 단순하게</td><td>STOMP·SSE</td></tr>
+      <tr><td>React 19 + TypeScript 7 + Vite 8 (Node 26 LTS)</td><td>화면</td><td>최신 정식 버전. 개발 서버가 /api·/ws를 게이트웨이로 넘김</td><td>—</td></tr>
+      <tr><td>Lightweight Charts 5.2.1</td><td>캔들·거래량·십자선·과거 스크롤</td><td>캔들 차트 전용이라 가볍고, 마지막 막대 갱신과 전체 다시 그리기를 나눠 써서 1초 갱신이 가벼움</td><td>—</td></tr>
+      <tr><td>JUnit 5 + Testcontainers, Vitest</td><td>테스트(백엔드 147개, 프론트 25개)</td><td>실제 PostgreSQL 18과 가짜 업비트 소스로 통합 테스트</td><td>인메모리 DB: 운영 DB와 동작이 다름</td></tr>
+      <tr><td>Docker Compose + Spring Boot 이미지 빌드</td><td>전체 실행(서비스 3개 + DB)</td><td>Dockerfile 없이 이미지를 만들고 한 명령으로 띄움</td><td>—</td></tr>
+      <tr><td>헤드리스 Chrome + DevTools 프로토콜</td><td>E2E 캡처 스크립트</td><td>설치 없이 실제 화면을 조작·캡처하고 화면 값을 업비트 REST와 대조</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="data">
+  <h2><span class="n">06</span>외부 데이터: 어떻게 주고, 어떻게 썼나</h2>
+  <p>1단계에서 실제로 쓴 외부 데이터는 업비트 하나다. 업비트는 REST와 웹소켓 두 길로 주는데, 2026-11-04~05에 직접 호출해 확인한 성질에 맞춰 설계했다. 문서에 없는 동작은 모두 실측으로 정했다.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>제공 경로</th><th>업비트가 주는 방식 (실측)</th><th>우리가 쓴 방법</th></tr></thead>
+    <tbody>
+      <tr><td>REST 캔들 (1~240분·일·주·월)</td><td>한 번에 최대 200개. <code>to</code>는 그 시각 직전까지(배타적). 상장 이전 구간은 빈 배열</td><td>단위마다 따로 받아 저장하고 200개씩 뒤로 넘긴다. 1분봉을 합치면 거래대금이 소수점 8번째 자리에서 어긋나 합치지 않는다</td></tr>
+      <tr><td>REST 호출 한도</td><td>IP당 초당 10회(캔들·시세)</td><td>어댑터가 초당 9회 예산을 두고 사용자 조회 &gt; 복구 &gt; 정기 검사 &gt; 과거 채우기 순으로 나눠 쓴다</td></tr>
+      <tr><td>거래 없는 시간</td><td>그 분의 캔들이 아예 없다. KRW-OPG는 1분봉 200개가 3,494분에 흩어져 있었다</td><td>확인을 끝낸 구간을 따로 기록해 "거래 없음"과 "아직 안 받음"을 구분한다. 빈 분을 채우지 않는다</td></tr>
+      <tr><td>웹소켓 체결</td><td>체결 즉시, 체결 순번(sequential_id) 포함. 재연결·재구독 때는 스냅숏으로 다시 온다</td><td>진행 중 캔들을 체결로 갱신한다. 같은 순번은 한 번만 반영하고, 스냅숏 체결은 버린다</td></tr>
+      <tr><td>웹소켓 분봉 (1~240분)</td><td>약 3초 간격(75초에 23건), 베타 기능. 같은 분이 여러 번 온다</td><td>우리가 반영한 체결보다 새로우면 업비트 값을 그대로 쓴다. 분이 닫힌 뒤 온 최종값은 정정으로 화면에 보낸다</td></tr>
+      <tr><td>웹소켓 티커</td><td>당일 시가·고가·저가·현재가·누적 거래량·대금. 당일 일봉과 값이 같다(자릿수만 다름)</td><td>일봉은 티커로, 주·월봉은 마감 일봉 + 오늘 일봉의 합으로 만든다. 웹소켓 캔들은 분 단위까지만 있다</td></tr>
+      <tr><td>숫자 형식</td><td>같은 값을 다른 자릿수로 준다(<code>41983565546.39229000</code>과 <code>…3922900000000000</code>)</td><td>원문 그대로 읽어 NUMERIC으로 저장하고, 값 기준으로 비교하고, API로도 문자열로 보낸다</td></tr>
+      <tr><td>웹소켓 연결</td><td>연결 요청 초당 5회. 메시지는 바이너리 프레임(UTF-8 JSON)</td><td>연결 하나로 KRW 전 종목을 구독한다. 끊기면 1→30초 간격으로 다시 붙고, 15초 동안 프레임이 없으면 끊고 다시 붙는다</td></tr>
+      <tr><td>시각 경계</td><td>일봉 09:00 KST(UTC 00:00), 주봉 월요일, 월봉 1일, 240분봉은 UTC 4시간 단위</td><td>같은 경계로 계산하고 화면은 KST로 보여 준다</td></tr>
+    </tbody>
+  </table></div>
+  <h3>주식과 커뮤니티 데이터 (아직 쓰지 않음)</h3>
+  <ul>
+    <li><b>한국 주식</b>: 한국투자증권 Open API가 웹소켓 실시간 체결을 KRX, NXT, 통합 TR로 나눠 준다. NXT가 정규장 거래량의 약 27.7%라 통합 시세를 기준으로 한다. 세션당 실시간 등록은 41건으로 알려져 있다(공식 미확인). 일반인에게 보여 주려면 KRX 정보이용계약이 필요하고, 이 계약은 법인만 할 수 있다. 그래서 개발은 한국투자증권으로, 공개는 코스콤 라이선스나 증권사 제휴로 한다.</li>
+    <li><b>미국 주식</b>: Massive(구 Polygon.io)의 전체 거래소 통합 시세(SIP)를 쓴다. 개인 플랜은 비전문가 개인 용도 전용이라 공개하려면 비즈니스 계약이 필요하다. 한 거래소만 주는 무료 플랜(Alpaca, IEX)은 거래량이 일부만 잡혀 제외했다.</li>
+    <li>두 경우 모두 같은 시세 이벤트를 보내는 어댑터(kis-adapter, massive-adapter)를 추가하면 나머지는 그대로 쓴다.</li>
+    <li><b>커뮤니티</b>: 네이버 종목토론실·디시인사이드는 robots.txt와 약관이 자동 수집을 막는다. 야놀자·여기어때 사건은 형사 무죄(대법원 2021도1533)였지만 민사에서 약 10억 원 배상이 나왔다. 그래서 제휴 전에는 쓰지 않는다.</li>
+  </ul>
+</section>
+
+<section id="design">
+  <h2><span class="n">07</span>정확도를 지키는 핵심 설계</h2>
+  <p>화면에는 웹소켓으로 빠르게 보여 주되, 마감된 캔들은 업비트 REST로 다시 받아 맞춘 뒤에야 "확인 구간"에 넣는다. 업비트 웹소켓 분봉은 베타 기능이라 그 값만으로는 맞다는 것을 증명할 수 없기 때문이다.</p>
+  <figure><img src="2026-11-08-e2e/diagram-accuracy.png" alt="실시간 경로와 검사·복구 경로"><figcaption>실시간 경로(위)와 검사·복구 경로(아래)</figcaption></figure>
+  <p>마감 직후 30초는 업비트 쪽에서 값이 아직 바뀔 수 있어 확인 구간에 넣지 않는다. 끊김은 웹소켓 끊김, 20초 무소식, 어댑터 재시작(새 연결 시각)으로 알아채고, 그 구간은 시한 판정에서 빼되 값 불일치는 똑같이 0이어야 한다.</p>
+</section>
+
+<section id="verify">
+  <h2><span class="n">08</span>검증 결과</h2>
+  <p>완료 기준 7개 중 6개를 실제 업비트 데이터로 통과했고, 24시간 연속 운영 1개가 남았다. 측정은 2026-11-08 새벽(한산)과 토요일 오후(상대적으로 활발)에 로컬 맥의 Docker Compose 스택에서 했다.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>기준</th><th>결과</th><th>근거</th></tr></thead>
+    <tbody>
+      <tr><td>일치: 마감 캔들이 업비트 REST와 모든 필드·개수 일치</td><td class="pass">통과</td><td>11시간 운영 시점 대조 165개 구간, 캔들 28,446개 불일치 0. E2E에서 화면의 14:36 캔들 6개 값이 업비트 화면·REST와 같음</td></tr>
+      <tr><td>연속 운영: 24시간 뒤 불일치 0, 시한 초과 0</td><td class="open">남음</td><td>맥이 06:27~15:01 KST에 잠들어 연속이 끊겼다. 그 8시간 34분은 장애 구간으로 기록됐고, 깨어난 뒤 5분 만에 다 채웠다(대조 0). 장애 구간 밖 시한 초과 17건(1분 8, 3분 8, 240분 1)은 원인 확인 중</td></tr>
+      <tr><td>끊김 복구: 웹소켓 5분 끊김 뒤 10분 안에 복구</td><td class="pass">통과</td><td>재연결 뒤 2분 26초에 복구 완료, 300종목 모두 빈 구간 채움, 대조 0</td></tr>
+      <tr><td>서비스 재시작: 어느 서비스를, 어떤 순서로 내렸다 올려도 같은 결과</td><td class="pass">통과</td><td>시세 서비스 196초, 어댑터 93초 만에 복구. 시세 서비스를 먼저 띄운 콜드 스타트와 어댑터 강제 종료도 복구, 대조 0. E2E 재연결 10초</td></tr>
+      <tr><td>실시간: 2초 안 반영, 마감 값 일치, 거래량 중복 없음</td><td class="pass">통과 (수정 후)</td><td>토요일 오후 10분: 수정 전 마감 값 23건 중 1건 불일치 → 고친 뒤 업비트 메시지 330건 모두 2초 안(중앙값 0.53초, 최대 0.69초), 마감 값 24건 일치, 거래량 초과 0</td></tr>
+      <tr><td>경계: 일·주·월·240분봉 시작 시각과 KST 화면</td><td class="pass">통과</td><td>2종목 × 11단위 × 30개 = 660개 업비트 REST 비교 0, E2E 시나리오 4</td></tr>
+      <tr><td>과거 스크롤: 미리 받지 않은 구간도 받아와 그리고 일치</td><td class="pass">통과</td><td>9·12·20일 전 구간 1,200개 불일치 0, E2E 시나리오 5</td></tr>
+    </tbody>
+  </table></div>
+  <h3>측정 출력 요약</h3>
+  <p>대조 도구(11시간 운영 시점). 괄호 안 설명과 초 단위 반올림은 덧붙인 것이고, 원문은 <code>docs/report/2026-11-08-e2e/verify-11h.txt</code>에 있다. 마지막 줄이 맥 잠자기 구간이다.</p>
+<pre>run at 2026-11-08T06:23:48Z
+checked windows=165 candles=28446 mismatches=0 uncovered=0 overdue=0
+OUTAGE 2026-11-07T17:49:00Z .. 2026-11-07T17:55:22Z   (첫 시작)
+OUTAGE 2026-11-07T18:01:00Z .. 2026-11-07T18:05:17Z   (컨테이너로 전환)
+OUTAGE 2026-11-07T18:12:42Z .. 2026-11-07T18:20:08Z   (웹소켓 5분 강제 끊김)
+OUTAGE 2026-11-07T18:23:00Z .. 2026-11-07T18:26:38Z   (시세 서비스 재시작)
+OUTAGE 2026-11-07T19:21:00Z .. 2026-11-07T19:38:34Z   (콜드 스타트 시험)
+OUTAGE 2026-11-07T19:41:07Z .. 2026-11-07T19:43:54Z   (어댑터 강제 종료)
+OUTAGE 2026-11-07T21:27:18Z .. 2026-11-08T06:07:05Z   (맥 잠자기 06:27~15:01 KST)</pre>
+  <p>실시간 비교, 토요일 오후 10분(KRW-XRP·USDT·BLEND + EURC·USDG). 수정 전에 어긋난 1건과 수정 후 결과(원문: 같은 폴더의 <code>compare-live-10min*.txt</code>):</p>
+<pre>수정 전  업비트 메시지 293 · 지연 291건 최대 0.77초 · 마감 23건 중 1건 불일치 · 중복 0
+         KRW-XRP 06:25  우리 마감: 종가 1590  거래량 72719.10868044
+                        업비트 최종: 종가 1589  거래량 72778.18467544  (마지막 체결 59.08개 누락)
+수정 후  업비트 메시지 333 · 지연 330건 중앙값 0.53초 최대 0.69초 · 마감 24건 모두 일치 · 중복 0</pre>
+</section>
+
+<section id="review">
+  <h2><span class="n">09</span>검토와 개선 과정</h2>
+  <p>단위 테스트를 모두 통과한 뒤에도, 실제 스택 시험·독립 검토·E2E에서 결함 17건을 더 찾아 고쳤다. 대부분 재연결·재시작·시작 순서·마감 직전처럼 경계에서 나왔다. 고칠 때는 그 결함을 재현하는 실패 테스트를 먼저 만들었다.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>찾은 곳</th><th>문제</th><th>고친 방법</th></tr></thead>
+    <tbody>
+      <tr><td>E2E(토요일 오후 실시간 비교)</td><td>분을 닫을 때 마지막 업비트 분봉(약 3초 간격) 값을 써서, 그 뒤 체결이 빠진 마감이 나감(KRW-XRP 06:25, 59.08개 누락)</td><td>화면에 보이는 값(업비트 값 + 그 뒤 체결)으로 닫음. 수정 후 24건 모두 일치</td></tr>
+      <tr><td>재검증(콜드 스타트)</td><td>시세 서비스를 어댑터보다 먼저 띄우면 장애 구간이 영영 안 닫힘. 복구가 어댑터 REST가 열리기 전에 돌아 1,800건이 모두 실패하고도 끝남</td><td>시작하자마자 장애 구간을 열고, 복구는 실패가 있으면 15초 뒤 다시 함</td></tr>
+      <tr><td>독립 검토(치명)</td><td>다음 분 첫 체결이 먼저 와서 앞 분을 닫은 뒤 도착한 업비트 최종값이 저장만 되고 화면에는 안 감</td><td>아직 확인 전이면 저장하고 화면에 정정으로 보냄</td></tr>
+      <tr><td>독립 검토</td><td>재구독 스냅숏이 끝난 캔들을 다시 "진행 중"으로 열고, 같은 체결을 두 번 더할 수 있음</td><td>끝난 캔들은 다시 열지 않고, 체결 스냅숏은 버림</td></tr>
+      <tr><td>독립 검토</td><td>방금 마감된 캔들을 곧바로 "확인 완료"로 굳힘. 서버 시계가 1초만 빨라도 틀린 값이 영구히 남음</td><td>마감 30초 뒤부터 확인 구간에 넣음</td></tr>
+      <tr><td>독립 검토</td><td>어댑터가 죽거나 연결이 조용히 멈춰도 알아채지 못함</td><td>어댑터가 5초마다 상태를 알리고, 20초 소식이 없으면 끊김으로 기록. 15초 동안 프레임이 없으면 다시 연결</td></tr>
+      <tr><td>독립 검토</td><td>느린 클라이언트 하나가 모든 사람의 실시간 갱신을 막음</td><td>세션마다 따로 보내고, 64개 넘게 밀리면 그 연결만 끊음</td></tr>
+      <tr><td>독립 검토</td><td>새 상장 종목이 검사되지 않음. 다른 사람의 과거 조회가 채운 빈 분이 열린 차트에 안 감. 오래 끊긴 차트에 빈 구간이 남음. 24시간 동안 시한을 넘긴 적이 있는지 알 수 없음</td><td>처음 확인부터 검사, 확인 구간 끝 이후 변경은 화면에 보냄, 이어지지 않으면 통째로 교체, 누적 카운터</td></tr>
+      <tr><td>실시간 비교 도구</td><td>과거 채우기가 저장하는 캔들까지 시청자에게 "정정"으로 보냄(1분에 16,181건)</td><td>값이 바뀐 정정과 시청자가 보던 구간만 보냄</td></tr>
+      <tr><td>사용자 지적</td><td>캔들이 2~3px로 가늘고, 앞 화면의 확대·세로축이 다음 종목에 남음</td><td>기본 폭 10px에 몸통을 채워 그리고, 바꿀 때 초기화</td></tr>
+      <tr><td>화면 확인</td><td>시작 직후 시세 없는 종목에서 목록이 깨짐. 창을 줄이면 차트가 목록을 덮음</td><td>"-" 표시, 레이아웃 수정</td></tr>
+    </tbody>
+  </table></div>
+  <h3>배운 점</h3>
+  <ul>
+    <li><b>E2E가 가장 많은 것을 알려 줬다.</b> 단위 테스트와 독립 검토를 다 통과한 코드에서, 거래가 많은 시간의 실시간 비교가 마감 직전 체결 누락을 찾았다.</li>
+    <li><b>측정 도구를 먼저 만들었다.</b> 대조 도구와 실시간 비교 도구 덕에 "맞다"를 숫자로 말할 수 있었다. 검사 스크립트가 숫자를 float로 읽어 생긴 가짜 불일치도 "숫자는 문자열로" 원칙으로 걸러냈다.</li>
+    <li><b>운영 환경도 시험 대상이다.</b> 맥이 잠들면 24시간 시험은 끊긴다. 대신 그 덕에 8시간 34분짜리 실제 장애를 기록하고 복구하는 모습을 볼 수 있었다.</li>
+  </ul>
+</section>
+
+<section id="next">
+  <h2><span class="n">10</span>남은 일과 다음 단계</h2>
+  <p>1단계를 닫으려면 잠들지 않는 환경에서 24시간 연속 운영을 확인해야 한다. 그 뒤 2단계는 주문·체결이고, 이때 서비스 사이 전송을 Kafka로 바꾼다.</p>
+  <h3>1단계 마무리</h3>
+  <ul>
+    <li>잠들지 않는 환경(맥 잠자기 방지 또는 상시 서버)에서 24시간 연속 운영 후 대조: 불일치·미확인·시한 초과 0, 시한 초과 누적 카운터 0</li>
+    <li>장애 구간 밖 시한 초과 17건(1분 8, 3분 8, 240분 1)의 원인 확인. 언제 생겼는지 남기도록 로그를 더하고, 큰 장애 직후 검사가 요청 예산(초당 9회)을 넘기는지 본다</li>
+    <li>평일 낮(거래 가장 많은 시간)에 실시간 비교 10분 재측정</li>
+    <li>PR #1 검토와 main 병합</li>
+  </ul>
+  <h3>공개 운영 전에 필요한 것</h3>
+  <ul>
+    <li>서비스 내부 API(<code>/internal/**</code>)는 지금 인증이 없다. 인터넷에서 닿지 않게 별도 포트나 네트워크 정책으로 막아야 한다.</li>
+    <li>업비트 시세의 상업적 이용 약관 확인. 주식은 KRX·코스콤 계약(법인 필요), Massive 비즈니스 계약.</li>
+    <li>인증, HTTPS, 클라이언트별 요청 제한, 백업.</li>
+    <li>미룬 경미 항목 10건(동시성 경계 상황, 메모리 정리 등). 결정 기록 문서에 있다.</li>
+  </ul>
+  <h3>다음 단계</h3>
+  <ol>
+    <li>주문·체결: 실제 호가창 잔량 기준 시장가, 지정가, 취소, 수수료·최소 주문 금액·호가 단위. 이때 Kafka 도입.</li>
+    <li>포트폴리오: 보유, 평균 단가, 평가·실현 손익.</li>
+    <li>회원: 로그인, 사용자별 가상자산(시드 1,000만 원), 초기화.</li>
+    <li>주식 어댑터: 계약 검토 후 한국투자증권·Massive 어댑터를 같은 방식으로 추가.</li>
+  </ol>
+</section>
+
+<section id="ask">
+  <h2><span class="n">11</span>멘토님께 여쭙고 싶은 점</h2>
+  <ol>
+    <li><b>공개 순서</b>: 주식 시세는 법인만 KRX 계약을 할 수 있다. 코인만으로 먼저 공개하는 것과 법인 설립 뒤 한꺼번에 공개하는 것 중 어느 쪽이 나을까?</li>
+    <li><b>Kafka 전환 시점</b>: 지금은 REST로 보내고 형식만 Kafka 기준이다. 주문·체결을 만들 때 전환하는 계획이 맞을까, 운영 부담을 고려하면 더 늦춰야 할까?</li>
+    <li><b>검증 기준</b>: 24시간 연속 운영과 거래 많은 시간대 E2E 재측정으로 "정확하다"고 말해도 될까? 상시 실행 환경은 클라우드와 개인 서버 중 어디가 적당할까?</li>
+    <li><b>모의 체결 모델</b>: 시장가를 실제 호가창 잔량 기준으로 체결하려 한다. 모의 투자에서 이 정도의 현실성이 필요할까?</li>
+    <li><b>커뮤니티 데이터 제휴</b>: 수집이 약관·법적으로 막혀 있다. 증권사나 커뮤니티에 제휴를 제안할 때 무엇을 준비해야 할까?</li>
+  </ol>
+</section>
+
+<footer>
+  <p>저장소: <code>docs/report/2026-11-08-e2e/</code>에 캡처 원본, E2E 측정 JSON, 대조·실시간 비교 출력이 있다. 다시 재려면 <code>node scripts/e2e-capture.mjs --reconnect</code>, <code>node scripts/compare-live.mjs --minutes 10</code>, 대조 도구는 <code>./gradlew :services:marketdata-service:bootRun --args='--spring.profiles.active=verify'</code>.</p>
+  <p>설계: <code>docs/superpowers/specs/2026-11-04-phase1-chart-design.md</code> · 계획: <code>docs/superpowers/plans/2026-11-05-phase1-chart.md</code> · 결정 기록: <code>docs/superpowers/plans/2026-11-05-phase1-chart-ledger.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>
