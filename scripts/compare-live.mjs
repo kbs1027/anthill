@@ -71,7 +71,7 @@ function recordOurs(text) {
   if (msg.type !== 'candles') return
   const at = Date.now()
   for (const it of msg.items) {
-    if (it.unit !== '1m' || !it.candle) continue
+    if (it.unit !== '1m' || (!it.candle && it.state !== 'removed')) continue
     const code = it.market.split(':')[1]
     push(ours, `${code}|${it.time}`, { at, state: it.state, v: it.candle })
     ;(ourIntervals.get(code) ?? ourIntervals.set(code, []).get(code)).push(at)
@@ -112,7 +112,12 @@ function judge(startedAt, endedAt) {
     const closed = pushes.filter((p) => p.state === 'closed')
     if (closed.length === 0) continue
     closedChecked++
-    for (const c of closed) if (!sameValues(c.v, last)) closedViolations.push({ key, ours: c.v, upbitLast: last })
+    for (const c of closed) {
+      if (sameValues(c.v, last)) continue
+      // 엄격 판정은 그대로(위반). 참고로 그 뒤 정정 푸시가 화면 값을 업비트와 같게 만들었는지도 남긴다.
+      const fixedBy = pushes.find((p) => p.at > c.at && p.state === 'corrected' && sameValues(p.v, last))
+      closedViolations.push({ key, ours: c.v, upbitLast: last, correctedLaterMs: fixedBy ? fixedBy.at - c.at : null })
+    }
   }
   const finite = latency.filter(Number.isFinite).sort((a, b) => a - b)
   const q = (p) => (finite.length ? finite[Math.min(finite.length - 1, Math.floor(p * finite.length))] : null)

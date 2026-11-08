@@ -59,12 +59,14 @@ class LiveCandleBookTest {
     }
 
     @Test
-    fun `next bucket trade closes previous with authoritative`() {
+    fun `next bucket trade closes previous with the trades applied after the last upbit candle`() {
+        // E2E(2026-11-08 KRW-XRP 06:25): 업비트 분봉은 약 3초 간격이라 마지막 분봉 뒤 체결이 더 있다.
+        // 마지막 분봉 값으로 닫으면 그 체결이 빠진 마감이 화면에 나간다(spec 7.3: 오래된 분봉은 큰 쪽을 유지).
         val upbit = m1("2026-11-08T10:00:00Z", "100", "110", "95", "108", "3", "320")
         book.onCandle(SourceCandleEvent(upbit, at("2026-11-08T10:00:50Z"), false))
         book.onTrade(trade("2026-11-08T10:00:55Z", "109"))
         book.onTrade(trade("2026-11-08T10:01:05Z", "107"))
-        assertEquals(listOf(upbit), closed.filter { it.unit == CandleUnit.M1 })
+        assertTrue(closed.single { it.unit == CandleUnit.M1 }.sameValuesAs(m1("2026-11-08T10:00:00Z", "100", "110", "95", "109", "4", "429")))
         assertEquals(at("2026-11-08T10:01:00Z"), book.current(BTC, CandleUnit.M1)!!.start)
         val updates = book.drainUpdates().filter { it.unit == CandleUnit.M1 }
         assertEquals(listOf(CandleState.CLOSED, CandleState.LIVE), updates.map { it.state })

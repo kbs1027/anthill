@@ -196,9 +196,11 @@ class LiveCandleBook(private val clock: Clock, private val closeGrace: Duration,
     }
 
     private fun close(key: Pair<InstrumentId, CandleUnit>, slot: Slot) {
-        val final = slot.authoritative ?: slot.display
+        // 화면에 보이는 값으로 닫는다: 업비트가 더 새로우면 이미 업비트 값이고, 업비트 분봉이 오래됐으면 그 뒤 체결까지 담겨 있다(spec 7.3).
+        // 마지막 업비트 분봉으로 닫으면 그 뒤 체결이 빠진다(약 3초 간격). 업비트 최종값이 늦게 오면 late()가 정정한다.
+        val final = slot.display
         sink.onClosed(final, false)
-        lastClosed[key] = Closed(final, slot.upbitAt ?: slot.lastTradeAt ?: final.start)
+        lastClosed[key] = Closed(final, slot.lastTradeAt ?: slot.upbitAt ?: final.start)
         if (key.second == CandleUnit.DAY) closedDays.getOrPut(key.first) { TreeMap() }[final.start] = final
         pendingLive.remove(key)
         pendingClosed += LiveUpdate(key.first, key.second, final.start, final, CandleState.CLOSED)
