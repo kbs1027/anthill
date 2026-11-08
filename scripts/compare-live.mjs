@@ -71,7 +71,7 @@ function recordOurs(text) {
   if (msg.type !== 'candles') return
   const at = Date.now()
   for (const it of msg.items) {
-    if (it.unit !== '1m' || (!it.candle && it.state !== 'removed')) continue
+    if (it.unit !== '1m' || !it.candle) continue
     const code = it.market.split(':')[1]
     push(ours, `${code}|${it.time}`, { at, state: it.state, v: it.candle })
     ;(ourIntervals.get(code) ?? ourIntervals.set(code, []).get(code)).push(at)
