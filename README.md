@@ -55,10 +55,28 @@ cd frontend && npm install && npm run dev
 ```
 
 ```bash
-docker compose -f docker-compose.full.yml up -d
+docker compose -f docker-compose.full.yml up -d --build
 ```
 
+브라우저에서 http://localhost:3000 을 연다. 화면은 nginx 컨테이너가 서빙하고 `/api`와 `/ws`만 게이트웨이로 넘긴다.
+
 이미지는 `anthill/<서비스>:dev`. 어댑터는 `dev` 프로필로 떠서 끊김 시험용 `POST /admin/stream/pause?seconds=N`을 연다. 멈출 때는 `docker compose -f docker-compose.full.yml down`(데이터는 `pgdata` 볼륨에 남는다).
+
+### 장애가 나도 차트가 멈추지 않게 하는 구성
+
+서비스마다 두 대를 띄운다. Kafka 없이 지금 구조에서 어느 한 대가 죽어도 이어지게 한 것이다.
+
+| 구간 | 두 대가 일하는 방식 | 넘어가는 조건 |
+|---|---|---|
+| `upbit-adapter-a/b` | 각자 업비트 소켓을 열고 둘 다 marketdata에 보낸다. marketdata가 합친다(체결은 순번으로 한 번만, 옛 티커는 버림) | 전환 없음. 한 대가 죽어도 다른 쪽 값이 계속 온다 |
+| `marketdata-a/b` | 둘 다 시세를 계산한다. 저장·발행·검사는 DB 임차권(`leader_lease`)을 쥔 주 서버만 한다 | 임차권 1초가 지나면 예비가 이어받는다 |
+| `edge-gateway-a/b` | 브라우저가 무작위로 한쪽을 고른다(`/ws?gw=a`). marketdata는 두 대 모두에 보낸다 | 소켓을 잃으면 브라우저가 0.1초 안에 다른 쪽으로 다시 붙는다 |
+
+브라우저는 게이트웨이의 0.5초 생존 신호가 1.5초 끊기면 소켓을 버리고 다시 붙고, 차트 오른쪽 위에 `실시간`, `재연결 중`, `시세 지연`을 표시한다.
+
+한 대뿐인 곳은 PostgreSQL과 nginx, 그리고 이 컴퓨터다. 업비트 자체가 멈추면 어떤 구성으로도 막지 못하고 `시세 지연`으로 표시한다.
+
+실제 장애를 일으켜 공백을 재는 도구는 `node scripts/failover-test.mjs`다.
 
 ## 테스트
 

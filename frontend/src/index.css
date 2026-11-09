@@ -62,6 +62,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .chart-panel > *, .chart-wrap > * { min-width: 0; }
 .chart { min-height: 0; overflow: hidden; }
 .chart-status { position: absolute; inset: 40px 0 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
+.chart-wrap > .chart, .chart-wrap > .connection { grid-row: 2; grid-column: 1; }
+.connection { justify-self: end; align-self: start; margin: 6px 78px 0 0; z-index: 2; display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 999px; font-size: 12px; color: var(--muted); background: var(--bg, transparent); pointer-events: none; }
+.connection i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.connection.live i { background: #22a06b; }
+.connection.reconnecting, .connection.delayed { color: #b25e09; font-weight: 600; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 6px; min-height: 22px; font-variant-numeric: tabular-nums; font-size: 13px; }
 .legend > div { display: flex; gap: 5px; }
 .legend dt { color: var(--muted); }

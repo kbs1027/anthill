@@ -7,7 +7,10 @@ import com.anthill.eventbus.EventPublisher
 import com.anthill.eventbus.HttpEventTransport
 import com.anthill.eventbus.Subscriber
 import com.anthill.gateway.realtime.CandleUpdateHandler
+import com.anthill.gateway.realtime.FeedMonitor
+import com.anthill.gateway.realtime.FeedStatusHandler
 import com.anthill.gateway.realtime.GatewayFanout
+import com.anthill.gateway.realtime.HeartbeatPublisher
 import com.anthill.gateway.realtime.StreamWebSocketHandler
 import com.anthill.gateway.realtime.SubscriptionRegistry
 import com.anthill.gateway.realtime.TickerUpdateHandler
@@ -57,8 +60,14 @@ class GatewayConfig {
     fun gatewayFanout(registry: SubscriptionRegistry, handler: StreamWebSocketHandler) = GatewayFanout(registry, handler::send)
 
     @Bean
-    fun eventInbox(fanout: GatewayFanout): EventInbox {
-        val handlers: List<EventHandler<*>> = listOf(CandleUpdateHandler(fanout), TickerUpdateHandler(fanout))
+    fun feedMonitor(clock: Clock) = FeedMonitor(clock)
+
+    @Bean
+    fun heartbeatPublisher(handler: StreamWebSocketHandler, monitor: FeedMonitor) = HeartbeatPublisher(handler, monitor)
+
+    @Bean
+    fun eventInbox(fanout: GatewayFanout, monitor: FeedMonitor): EventInbox {
+        val handlers: List<EventHandler<*>> = listOf(CandleUpdateHandler(fanout), TickerUpdateHandler(fanout), FeedStatusHandler(monitor))
         return EventInbox(handlers, ContractJson.mapper())
     }
 
