@@ -33,13 +33,12 @@ class Startup(
     private val outages: OutageLog? = null,
     private val coverage: CoverageRepository? = null,
     private val retry: Duration = Duration.ofSeconds(5),
-    private val isLeader: () -> Boolean = { true },
 ) {
     private val log = Logger.getLogger(Startup::class.java.name)
 
     fun run() {
         // 어댑터를 기다리기 전에 장애 구간부터 연다. 기다리는 사이 어댑터 알림으로 복구가 먼저 돌아도 그 복구가 닫는다.
-        if (outages != null && coverage != null && isLeader()) {
+        if (outages != null && coverage != null) {
             val ends = coverage.ends()
             sources.forEach { name -> outages.open(name, ends.filterKeys { it.first.source == name }.values.maxOrNull() ?: clock.instant()) }
         }

@@ -125,7 +125,6 @@ class LiveCandleBook(private val clock: Clock, private val closeGrace: Duration,
             slot == null -> open(key, day, day, null, null)
             day.start < slot.display.start -> return
             day.start == slot.display.start -> {
-                if (day.volume < slot.display.volume) return   // 어댑터 두 대 중 느린 쪽의 옛 티커. 하루 누적 거래량은 줄지 않는다.
                 if (slot.display.sameValuesAs(day)) return
                 slot.display = day
                 slot.authoritative = day
@@ -150,10 +149,6 @@ class LiveCandleBook(private val clock: Clock, private val closeGrace: Duration,
 
     @Synchronized
     fun current(i: InstrumentId, u: CandleUnit): Candle? = slots[i to u]?.display
-
-    /** 진행 중인 칸을 모두 다시 내보낼 것으로 표시한다(예비 서버가 이어받을 때). */
-    @Synchronized
-    fun markAllLive() = slots.forEach { (key, slot) -> markLive(key, slot.display) }
 
     @Synchronized
     fun drainUpdates(): List<LiveUpdate> {

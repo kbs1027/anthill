@@ -94,9 +94,6 @@ class StreamWebSocketHandler(
         }
     }
 
-    /** 열린 모든 세션에 보낸다(생존 신호). */
-    fun broadcast(json: String) = sessions.keys.forEach { send(it, json) }
-
     private fun drop(sessionId: String, out: Outbox) {
         forget(sessionId)
         // 막힌 연결은 닫기도 막힐 수 있어 따로 닫는다.

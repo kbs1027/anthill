@@ -16,7 +16,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Level
 import java.util.logging.Logger
-import kotlin.random.Random
 
 interface StreamListener {
     fun onMessage(m: UpbitMessage)
@@ -36,17 +35,14 @@ interface StreamControl {
  * 연결·끊김은 [StreamListener]로 알린다. 업비트는 바이너리 프레임(UTF-8 JSON)으로 보낸다.
  * 오류 없이 멈춘 연결(잠자기·NAT·네트워크 변경)은 [idleTimeout] 동안 프레임이 없으면 끊고 다시 연결한다.
  * KRW 전 종목 티커를 받으므로 정상 연결이면 1초 안에 프레임이 온다.
- * 대기 시간은 연결이 [stableAfter] 넘게 유지됐을 때만 처음으로 돌린다: 열렸다 바로 닫히는 연결로 업비트(연결 요청 초당 5회)를 두드리지 않는다.
- * 대기 시간에는 무작위 값을 섞어, 어댑터 두 대가 같은 순간에 다시 붙지 않게 한다.
  */
 class UpbitStreamClient(
     private val listener: StreamListener,
     private val clock: Clock,
     private val connect: (WebSocket.Listener) -> CompletableFuture<WebSocket>,
-    private val backoffBase: Duration = Duration.ofMillis(200),
-    private val backoffMax: Duration = Duration.ofSeconds(5),
-    private val idleTimeout: Duration = Duration.ofSeconds(2),
-    private val stableAfter: Duration = Duration.ofSeconds(30),
+    private val backoffBase: Duration = Duration.ofSeconds(1),
+    private val backoffMax: Duration = Duration.ofSeconds(30),
+    private val idleTimeout: Duration = Duration.ofSeconds(15),
 ) : StreamControl, AutoCloseable {
 
     private val log = Logger.getLogger(UpbitStreamClient::class.java.name)
@@ -104,7 +100,8 @@ class UpbitStreamClient(
                     log.log(Level.WARNING, "upbit websocket connect failed", e)
                     current.end()
                 }
-                while (!current.closed.await(WATCH_MS, TimeUnit.MILLISECONDS)) {
+                if (current.opened) backoff = backoffBase
+                while (!current.closed.await(1, TimeUnit.SECONDS)) {
                     if (current.opened && Duration.between(current.lastFrameAt, clock.instant()) > idleTimeout) {
                         log.warning("no upbit frame for $idleTimeout, reconnecting")
                         current.socket?.abort()
@@ -113,17 +110,14 @@ class UpbitStreamClient(
                 }
                 session = null
                 if (!running) return
-                if (current.upFor() >= stableAfter) backoff = backoffBase
                 if (Duration.between(clock.instant(), pausedUntil) > Duration.ZERO) continue
-                Thread.sleep(jittered(backoff))
+                Thread.sleep(backoff)
                 backoff = minOf(backoff.multipliedBy(2), backoffMax)
             }
         } catch (_: InterruptedException) {
             // 종료
         }
     }
-
-    private fun jittered(d: Duration): Duration = Duration.ofNanos((d.toNanos() * (0.5 + 0.5 * Random.nextDouble())).toLong())
 
     private fun deliver(text: String) {
         try {
@@ -140,8 +134,6 @@ class UpbitStreamClient(
         @Volatile var socket: WebSocket? = null
         @Volatile var opened = false
         @Volatile var lastFrameAt: Instant = clock.instant()
-        @Volatile private var openedAt: Instant? = null
-        @Volatile private var endedAt: Instant? = null
         private val ended = AtomicBoolean(false)
         private val bytes = ByteArrayOutputStream()
         private val text = StringBuilder()
@@ -156,7 +148,6 @@ class UpbitStreamClient(
                 socket = webSocket
                 lastFrameAt = clock.instant()
                 opened = true
-                openedAt = lastFrameAt
                 webSocket.sendText(UpbitStreamParser.subscribeMessage(markets, ticket()), true)
                 val now = clock.instant()
                 connectedSince = now
@@ -199,15 +190,8 @@ class UpbitStreamClient(
             end()
         }
 
-        /** 연결이 유지된 시간. 열린 적이 없으면 0. */
-        fun upFor(): Duration {
-            val from = openedAt ?: return Duration.ZERO
-            return Duration.between(from, endedAt ?: clock.instant())
-        }
-
         fun end() = synchronized(this) {
             if (!ended.compareAndSet(false, true)) return
-            endedAt = clock.instant()
             if (opened) {
                 connectedSince = null
                 listener.onDisconnected(clock.instant())
@@ -217,8 +201,6 @@ class UpbitStreamClient(
     }
 
     companion object {
-        private const val WATCH_MS = 100L
-
         fun connector(url: String, http: HttpClient = HttpClient.newHttpClient()): (WebSocket.Listener) -> CompletableFuture<WebSocket> =
             { l -> http.newWebSocketBuilder().connectTimeout(Duration.ofSeconds(10)).buildAsync(URI(url), l) }
     }

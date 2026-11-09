@@ -1,50 +1,10 @@
-# 전체 실행: DB + 서비스마다 두 대 + 화면. 브라우저에서 http://localhost:3000 을 연다.
+# 전체 실행: DB + 세 서비스.
 # 이미지 만들기: ./gradlew :services:upbit-adapter:bootBuildImage :services:marketdata-service:bootBuildImage :services:edge-gateway:bootBuildImage
-# 실행: docker compose -f docker-compose.full.yml up -d --build --remove-orphans      멈춤: docker compose -f docker-compose.full.yml down
+# 실행: docker compose -f docker-compose.full.yml up -d      멈춤: docker compose -f docker-compose.full.yml down
 #
 # 서비스끼리는 서비스 이름으로 찾는다. 맵·목록 설정(소스 주소, 이벤트 구독자)은 SPRING_APPLICATION_JSON으로 덮어쓴다:
 # 환경 변수 ANTHILL_SOURCES_UPBIT는 맵 키가 소문자(upbit)로 묶이고, ANTHILL_EVENTS_SUBSCRIBERS_0_URL은 목록 전체를 바꿔 types가 빠지기 때문이다.
-# 왼쪽 포트(8080~8082)는 a, 18080~18082는 b다. 도구와 장애 시험에서 한 대를 골라 부를 때 쓴다.
 name: anthill
-
-x-adapter: &adapter
-  image: anthill/upbit-adapter:dev
-  restart: unless-stopped
-
-x-adapter-env: &adapter-env
-  SPRING_PROFILES_ACTIVE: dev   # /admin/stream/pause (끊김 복구 시험용)
-  SPRING_APPLICATION_JSON: >-
-    {"anthill":{"events":{"subscribers":[
-    {"types":["market."],"url":"http://marketdata-a:8081/internal/events"},
-    {"types":["market."],"url":"http://marketdata-b:8081/internal/events"}]}}}
-
-x-marketdata: &marketdata
-  image: anthill/marketdata-service:dev
-  depends_on:
-    db:
-      condition: service_healthy
-  restart: unless-stopped
-
-x-marketdata-env: &marketdata-env
-  SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/anthill
-  SPRING_APPLICATION_JSON: >-
-    {"anthill":{"sources":{"UPBIT":["http://upbit-adapter-a:8082","http://upbit-adapter-b:8082"]},
-    "events":{"subscribers":[
-    {"types":["chart."],"url":"http://edge-gateway-a:8080/internal/events"},
-    {"types":["chart."],"url":"http://edge-gateway-b:8080/internal/events"}]}}}
-
-x-gateway: &gateway
-  image: anthill/edge-gateway:dev
-  depends_on:
-    - marketdata-lb
-  restart: unless-stopped
-
-x-gateway-env: &gateway-env
-  ANTHILL_MARKETDATA_URL: http://marketdata-lb:8081
-  SPRING_APPLICATION_JSON: >-
-    {"anthill":{"events":{"subscribers":[
-    {"types":["realtime."],"url":"http://marketdata-a:8081/internal/events"},
-    {"types":["realtime."],"url":"http://marketdata-b:8081/internal/events"}]}}}
 
 services:
   db:
@@ -64,69 +24,38 @@ services:
       retries: 20
     restart: unless-stopped
 
-  upbit-adapter-a:
-    <<: *adapter
+  upbit-adapter:
+    image: anthill/upbit-adapter:dev
     environment:
-      <<: *adapter-env
-      ANTHILL_INSTANCEID: a
+      SPRING_PROFILES_ACTIVE: dev   # /admin/stream/pause (끊김 복구 시험용)
+      SPRING_APPLICATION_JSON: >-
+        {"anthill":{"events":{"subscribers":[{"types":["market."],"url":"http://marketdata-service:8081/internal/events"}]}}}
     ports:
       - "8082:8082"
-
-  upbit-adapter-b:
-    <<: *adapter
-    environment:
-      <<: *adapter-env
-      ANTHILL_INSTANCEID: b
-    ports:
-      - "18082:8082"
-
-  marketdata-a:
-    <<: *marketdata
-    environment:
-      <<: *marketdata-env
-      ANTHILL_INSTANCEID: a
-    ports:
-      - "8081:8081"
-
-  marketdata-b:
-    <<: *marketdata
-    environment:
-      <<: *marketdata-env
-      ANTHILL_INSTANCEID: b
-    ports:
-      - "18081:8081"
-
-  marketdata-lb:
-    image: nginx:1.28-alpine
-    volumes:
-      - ./deploy/nginx/marketdata-lb.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - marketdata-a
-      - marketdata-b
     restart: unless-stopped
 
-  edge-gateway-a:
-    <<: *gateway
+  marketdata-service:
+    image: anthill/marketdata-service:dev
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
-      <<: *gateway-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/anthill
+      SPRING_APPLICATION_JSON: >-
+        {"anthill":{"sources":{"UPBIT":"http://upbit-adapter:8082"},
+        "events":{"subscribers":[{"types":["chart."],"url":"http://edge-gateway:8080/internal/events"}]}}}
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+
+  edge-gateway:
+    image: anthill/edge-gateway:dev
+    environment:
+      ANTHILL_MARKETDATA_URL: http://marketdata-service:8081
+      SPRING_APPLICATION_JSON: >-
+        {"anthill":{"events":{"subscribers":[{"types":["realtime."],"url":"http://marketdata-service:8081/internal/events"}]}}}
     ports:
       - "8080:8080"
-
-  edge-gateway-b:
-    <<: *gateway
-    environment:
-      <<: *gateway-env
-    ports:
-      - "18080:8080"
-
-  frontend:
-    build: ./frontend
-    image: anthill/frontend:dev
-    depends_on:
-      - edge-gateway-a
-      - edge-gateway-b
-    ports:
-      - "3000:80"
     restart: unless-stopped
 
 volumes:

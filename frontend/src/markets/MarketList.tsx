@@ -1,4 +1,3 @@
-import { retryUntil } from '../api/retry'
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { fetchMarkets } from '../api/client'
 import { sharedStream } from '../api/stream'
@@ -37,17 +36,9 @@ export function MarketList({ selected, onSelect, onLoaded }: Props) {
         }),
       )
     })
-    // 끊긴 동안 값이 바뀌고 그 뒤 거래가 없는 종목은 푸시가 오지 않으므로 목록을 다시 받는다.
-    let run = 0
-    const offReconnect = stream.onReconnect(async () => {
-      const mine = ++run
-      const list = await retryUntil(fetchMarkets, { stop: () => cancelled || mine !== run })
-      if (list) setMarkets(list)
-    })
     return () => {
       cancelled = true
       off()
-      offReconnect()
     }
   }, [])
 

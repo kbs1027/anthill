@@ -21,7 +21,7 @@ class TradeHandler(private val book: LiveCandleBook, private val tracker: Stream
     override val type = EventTypes.MARKET_TRADE
     override val payloadType = TradeEvent::class.java
     override fun handle(key: String, payload: TradeEvent, envelope: EventEnvelope) {
-        tracker.touch(payload.instrument.source, envelope.occurredAt, envelope.producer)
+        tracker.touch(payload.instrument.source, envelope.occurredAt)
         book.onTrade(payload)
     }
 }
@@ -30,7 +30,7 @@ class SourceCandleHandler(private val book: LiveCandleBook, private val tracker:
     override val type = EventTypes.MARKET_CANDLE
     override val payloadType = SourceCandleEvent::class.java
     override fun handle(key: String, payload: SourceCandleEvent, envelope: EventEnvelope) {
-        tracker.touch(payload.candle.instrument.source, envelope.occurredAt, envelope.producer)
+        tracker.touch(payload.candle.instrument.source, envelope.occurredAt)
         book.onCandle(payload)
     }
 }
@@ -39,7 +39,7 @@ class TickerHandler(private val book: LiveCandleBook, private val tickers: Ticke
     override val type = EventTypes.MARKET_TICKER
     override val payloadType = TickerEvent::class.java
     override fun handle(key: String, payload: TickerEvent, envelope: EventEnvelope) {
-        tracker.touch(payload.ticker.instrument.source, envelope.occurredAt, envelope.producer)
+        tracker.touch(payload.ticker.instrument.source, envelope.occurredAt)
         tickers.put(payload.ticker)
         book.onTicker(payload.ticker)
     }
@@ -49,9 +49,9 @@ class StreamStatusHandler(private val tracker: StreamStatusTracker) : EventHandl
     override val type = EventTypes.MARKET_STREAM_STATUS
     override val payloadType = StreamStatusEvent::class.java
     override fun handle(key: String, payload: StreamStatusEvent, envelope: EventEnvelope) {
-        // 어댑터는 1초마다 같은 상태를 다시 알린다(연결이면 at = 연결 시각). 받은 시각은 살아 있다는 신호다.
-        tracker.update(payload.source, StreamStatus(payload.connected, if (payload.connected) payload.at else null), payload.at, envelope.producer)
-        tracker.touch(payload.source, envelope.occurredAt, envelope.producer)
+        // 어댑터는 5초마다 같은 상태를 다시 알린다(연결이면 at = 연결 시각). 받은 시각은 살아 있다는 신호다.
+        tracker.update(payload.source, StreamStatus(payload.connected, if (payload.connected) payload.at else null), payload.at)
+        tracker.touch(payload.source, envelope.occurredAt)
     }
 }
 

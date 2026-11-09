@@ -51,9 +51,7 @@ class StreamWebSocketHandlerTest {
         val received = LinkedBlockingQueue<String>()
         val session: WebSocketSession = StandardWebSocketClient().execute(
             object : TextWebSocketHandler() {
-                override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
-                    if (!message.payload.contains("\"type\":\"hb\"")) received += message.payload   // 생존 신호는 HeartbeatTest에서 본다
-                }
+                override fun handleTextMessage(session: WebSocketSession, message: TextMessage) { received += message.payload }
             },
             "ws://localhost:$port/ws",
         ).get(5, TimeUnit.SECONDS).also { open += it }
