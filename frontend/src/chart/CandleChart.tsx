@@ -1,3 +1,5 @@
+import { retryUntil } from '../api/retry'
+import { ConnectionBadge } from './ConnectionBadge'
 import {
   CandlestickSeries,
   ColorType,
@@ -198,18 +200,17 @@ export function CandleChart({ market, unit }: { market: string; unit: UnitCode }
     }
     chart.timeScale().subscribeVisibleLogicalRangeChange(onRange)
 
+    let reconnectRun = 0
     const offReconnect = stream.onReconnect(async () => {
       if (!ready) return
-      try {
-        const page = await fetchCandles(market, unit)
-        if (cancelled) return
-        const merged = mergeLatest(bars.current, withLive(page, market, unit))
-        bars.current = merged.bars
-        if (merged.replaced) hasMore = page.hasMore   // 빈 구간을 버렸으니 과거는 이 페이지 앞부터 다시 받는다
-        drawAll(bars.current)
-      } catch {
-        // 다음 갱신이나 재연결 때 맞춰진다
-      }
+      // 게이트웨이가 marketdata보다 먼저 살아나면 첫 조회가 실패한다. 빈 구간이 남지 않게 성공할 때까지 다시 시도한다.
+      const run = ++reconnectRun
+      const page = await retryUntil(() => fetchCandles(market, unit), { stop: () => cancelled || run !== reconnectRun })
+      if (!page) return
+      const merged = mergeLatest(bars.current, withLive(page, market, unit))
+      bars.current = merged.bars
+      if (merged.replaced) hasMore = page.hasMore   // 빈 구간을 버렸으니 과거는 이 페이지 앞부터 다시 받는다
+      drawAll(bars.current)
     })
 
     void load()
@@ -225,6 +226,7 @@ export function CandleChart({ market, unit }: { market: string; unit: UnitCode }
   return (
     <div className="chart-wrap">
       <Legend bar={hover ?? last} unit={unit} />
+      <ConnectionBadge />
       <div className="chart" ref={box} />
       {status !== 'ready' && (
         <div className="chart-status" role="status">

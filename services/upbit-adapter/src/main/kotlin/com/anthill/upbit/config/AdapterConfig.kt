@@ -12,6 +12,7 @@ import com.anthill.upbit.stream.StreamEventBridge
 import com.anthill.upbit.stream.StreamHeartbeat
 import com.anthill.upbit.stream.UpbitStreamClient
 import io.micrometer.core.instrument.MeterRegistry
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.ApplicationRunner
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -52,12 +53,12 @@ class AdapterConfig {
         HttpUpbitRestClient(props.restBaseUrl, budget)
 
     @Bean
-    fun eventPublisher(props: EventsProperties, clock: Clock, meter: MeterRegistry): EventPublisher =
+    fun eventPublisher(props: EventsProperties, clock: Clock, meter: MeterRegistry, @Value("\${anthill.instance-id:1}") instanceId: String): EventPublisher =
         if (!props.enabled) {
             EventPublisher { _, _, _ -> }
         } else {
             HttpEventTransport(
-                "upbit-adapter", props.subscribers.map { Subscriber(it.types, it.url) }, ContractJson.mapper(), clock,
+                "upbit-adapter-$instanceId", props.subscribers.map { Subscriber(it.types, it.url) }, ContractJson.mapper(), clock,
                 onDropped = { meter.counter("anthill.events.dropped").increment(it.toDouble()) },
             )
         }
@@ -92,13 +93,13 @@ class AdapterConfig {
     }
 }
 
-/** 5초마다 스트림 상태를 다시 알린다(marketdata가 어댑터가 살아 있는지 판단한다). */
+/** 1초마다 스트림 상태를 다시 알린다(marketdata가 어댑터가 살아 있는지 판단한다). */
 @Component
 @ConditionalOnProperty("anthill.stream.enabled", havingValue = "true")
 class StreamHeartbeatSchedule(stream: UpbitStreamClient, publisher: EventPublisher, clock: Clock) {
     private val heartbeat = StreamHeartbeat(stream, publisher, clock)
 
-    @Scheduled(fixedRate = 5000)
+    @Scheduled(fixedRate = 1000)
     fun beat() = heartbeat.beat()
 }
 

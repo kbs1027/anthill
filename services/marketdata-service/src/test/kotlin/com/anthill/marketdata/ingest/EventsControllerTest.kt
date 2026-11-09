@@ -30,7 +30,8 @@ class EventsControllerTest : PgTest() {
     fun `duplicate trade batch is applied once`() {
         val id = InstrumentId.parse("UPBIT:KRW-DUP")
         val mapper = ContractJson.mapper()
-        val trade = TradeEvent(id, BigDecimal("100"), BigDecimal("0.5"), Instant.parse("2026-11-08T10:00:05Z"), 1)
+        // 지금 시각으로 만든다: 이미 끝난 칸의 체결은 책에 반영되지 않는다.
+        val trade = TradeEvent(id, BigDecimal("100"), BigDecimal("0.5"), Instant.now(), 1)
         val envelope = EventEnvelope(UUID.randomUUID(), EventTypes.MARKET_TRADE, 1, id.value, Instant.now(), "upbit-adapter", mapper.valueToTree(trade))
         val body = mapper.writeValueAsString(listOf(envelope))
         repeat(2) {

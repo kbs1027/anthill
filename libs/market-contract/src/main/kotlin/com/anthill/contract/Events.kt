@@ -29,6 +29,9 @@ data class CandleUpdateEvent(
     val state: CandleState,
 )
 
+/** 시세 원천이 살아 있는지. marketdata 주 서버가 1초마다 게이트웨이에 알린다. */
+data class FeedStatusEvent(val connected: Boolean, val at: Instant)
+
 data class ViewingEvent(val gatewayId: String, val instruments: Set<InstrumentId>, val at: Instant)
 
 /** 이벤트 type 이름. Kafka로 옮기면 그대로 토픽 이름이 된다. */
@@ -40,5 +43,6 @@ object EventTypes {
     const val MARKET_INSTRUMENT = "market.instrument.v1"
     const val CHART_CANDLE_UPDATE = "chart.candle-update.v1"
     const val CHART_TICKER_UPDATE = "chart.ticker-update.v1"
+    const val CHART_FEED_STATUS = "chart.feed-status.v1"
     const val REALTIME_VIEWING = "realtime.viewing.v1"
 }
