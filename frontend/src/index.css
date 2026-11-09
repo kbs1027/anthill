@@ -1,0 +1,99 @@
+/* 상승 빨강·하락 파랑(국내 관례). 숫자는 고정폭 숫자로 줄을 맞춘다. */
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --ink: #15191f;
+  --muted: #5d6572;
+  --line: #e1e4e9;
+  --grid: #eef0f3;
+  --accent: #1c64d9;
+  --up: #d1352b;
+  --down: #1a5fd0;
+  --up-soft: rgba(209, 53, 43, 0.35);
+  --down-soft: rgba(26, 95, 208, 0.35);
+  --hover: #f0f3f8;
+  --selected: #e7eefb;
+  font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI', sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1015;
+    --surface: #151a21;
+    --ink: #e5e9ef;
+    --muted: #96a0ad;
+    --line: #262d37;
+    --grid: #1c222b;
+    --accent: #5b9bff;
+    --up: #f0564b;
+    --down: #4b8dff;
+    --up-soft: rgba(240, 86, 75, 0.35);
+    --down-soft: rgba(75, 141, 255, 0.35);
+    --hover: #1b222c;
+    --selected: #1d2a3d;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.5; }
+button, input { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+.top { display: flex; align-items: baseline; gap: 12px; padding: 12px 20px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.brand { font-weight: 800; font-size: 18px; letter-spacing: -0.02em; }
+.top-note { color: var(--muted); font-size: 13px; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; padding: 12px; min-height: 0; }
+.chart-panel, .markets-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-height: 0; }
+.chart-panel { display: grid; grid-template-rows: auto auto 1fr; padding: 14px 16px 10px; gap: 10px; }
+.chart-head { display: flex; align-items: baseline; gap: 10px; }
+.chart-head h1 { margin: 0; font-size: 20px; }
+.code { color: var(--muted); font-variant-numeric: tabular-nums; }
+.units { display: flex; flex-wrap: wrap; gap: 4px; }
+.units button { border: 1px solid var(--line); background: var(--surface); padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+.units button:hover { background: var(--hover); }
+.units button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.chart-wrap { position: relative; min-height: 420px; display: grid; grid-template-rows: auto 1fr; }
+/* 차트 캔버스는 고정 px 폭이라, 줄어들 수 있게 min-width:0과 overflow를 준다(안 주면 창을 줄일 때 옆 패널을 덮는다). */
+.chart-panel > *, .chart-wrap > * { min-width: 0; }
+.chart { min-height: 0; overflow: hidden; }
+.chart-status { position: absolute; inset: 40px 0 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 6px; min-height: 22px; font-variant-numeric: tabular-nums; font-size: 13px; }
+.legend > div { display: flex; gap: 5px; }
+.legend dt { color: var(--muted); }
+.legend dd { margin: 0; }
+.legend-time { color: var(--muted); }
+.legend.up .close { color: var(--up); }
+.legend.down .close { color: var(--down); }
+
+.markets { display: grid; grid-template-rows: auto auto 1fr; height: 100%; min-height: 0; }
+.search { display: block; padding: 12px; border-bottom: 1px solid var(--line); }
+.search input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.market-head, .market-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr 0.8fr 0.9fr; gap: 6px; align-items: center; }
+.market-head { padding: 6px 12px; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--line); }
+.market-head span:not(:first-child) { text-align: right; }
+.market-rows { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; }
+.market-row { width: 100%; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; cursor: pointer; }
+.market-row:hover { background: var(--hover); }
+.market-row[aria-current='true'] { background: var(--selected); }
+.market-row .name { display: grid; min-width: 0; }
+.market-row .name b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.market-row .name small { color: var(--muted); font-size: 11px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; white-space: nowrap; }
+.up { color: var(--up); }
+.down { color: var(--down); }
+.muted { color: var(--muted); }
+.markets-note { padding: 16px 12px; margin: 0; color: var(--muted); }
+
+@media (max-width: 900px) {
+  .app { height: auto; }
+  .layout { grid-template-columns: 1fr; padding: 8px; }
+  .chart-panel { padding: 12px; }
+  /* 페이지 높이가 내용 따라 정해지는 좁은 화면에서는 차트 높이를 정해 줘야 autoSize가 커지기만 하지 않는다. */
+  .chart-wrap { height: 60vh; min-height: 340px; }
+  .markets-panel { height: 70vh; }
+}

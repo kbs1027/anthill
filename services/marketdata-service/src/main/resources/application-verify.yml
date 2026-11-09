@@ -1,0 +1,5 @@
+# 대조 도구 전용: 정기 작업·이벤트 발행 없이 DB와 소스 REST만 본다. 웹 서버도 띄우지 않는다.
+spring.main.web-application-type: none
+anthill:
+  jobs.enabled: false
+  events.enabled: false

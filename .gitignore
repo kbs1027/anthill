@@ -1,0 +1,12 @@
+.superpowers/
+docs/superpowers/
+docs/report/
+docs/architecture/2026-11-07-phase1-plan.html
+.DS_Store
+.idea/
+*.iml
+build/
+.gradle/
+.kotlin/
+node_modules/
+dist/

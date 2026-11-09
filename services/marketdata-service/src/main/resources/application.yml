@@ -1,0 +1,18 @@
+server.port: 8081
+spring:
+  application.name: marketdata-service
+  threads.virtual.enabled: true
+  datasource:
+    url: jdbc:postgresql://localhost:5432/anthill
+    username: anthill
+    password: anthill
+anthill:
+  sources:
+    UPBIT: http://localhost:8082
+  jobs.enabled: true
+  backfill.minute-days: 7
+  live.close-grace: 10s
+  events.subscribers:
+    - types: [ "chart." ]
+      url: http://localhost:8080/internal/events
+management.endpoints.web.exposure.include: health,metrics

@@ -1,0 +1,14 @@
+server.port: 8082
+spring:
+  application.name: upbit-adapter
+  threads.virtual.enabled: true
+anthill:
+  upbit:
+    rest-base-url: https://api.upbit.com/v1
+    ws-url: wss://api.upbit.com/websocket/v1
+    rest-rate-per-second: 9
+  stream.enabled: true
+  events.subscribers:
+    - types: [ "market." ]
+      url: http://localhost:8081/internal/events
+management.endpoints.web.exposure.include: health,metrics

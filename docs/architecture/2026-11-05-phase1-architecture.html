@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>anthill 1단계 아키텍처</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* layout: 한 줄 읽기 칼럼(약 70자) + 다이어그램과 표는 1180px까지 넓게 */
+  --bg: #f3f5f7;
+  --surface: #ffffff;
+  --ink: #141a22;
+  --muted: #5a6473;
+  --line: #dce1e7;
+  --accent: #0b7a6e;
+  --line-strong: #98a2b0;
+  --accent-soft: rgba(11, 122, 110, 0.12);
+  --warn: #9a5b00;
+  --bad: #b4231a;
+  --font-display: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1116; --surface: #161b22; --ink: #e4e8ee; --muted: #97a1ae; --line: #262d37;
+    --accent: #3cc2b0; --line-strong: #4b5565; --accent-soft: rgba(60, 194, 176, 0.16);
+    --warn: #e2a64a; --bad: #ff7b6e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1116; --surface: #161b22; --ink: #e4e8ee; --muted: #97a1ae; --line: #262d37;
+  --accent: #3cc2b0; --line-strong: #4b5565; --accent-soft: rgba(60, 194, 176, 0.16);
+  --warn: #e2a64a; --bad: #ff7b6e;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+/* 결정 기록 · 수집 가능 여부 */
+.dg .dbadge rect { fill: var(--accent); }
+.dg .dbadge text { fill: var(--surface); font-size: 10px; font-weight: 700; font-family: var(--font-mono); }
+.did { display: inline-block; font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--surface); background: var(--accent); border-radius: 8px; padding: 0 7px; white-space: nowrap; }
+.st { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 6px; white-space: nowrap; border: 1px solid var(--ink); }
+.st.ok { border-color: var(--accent); color: var(--accent); }
+.st.wait { border-style: dashed; border-color: var(--line-strong); color: var(--muted); }
+.cv { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 6px; white-space: nowrap; border: 1px solid currentColor; }
+.cv.yes { color: var(--ink); }
+.cv.part { color: var(--warn); }
+.cv.no { color: var(--bad); }
+table.dec td:nth-child(2) { font-weight: 600; min-width: 220px; }
+table.dec td:nth-child(5) { font-size: 13px; color: var(--muted); }
+table.dec tr.grp td, table.lim tr.grp td { background: var(--bg); font-family: var(--font-display); font-weight: 600; font-size: 13.5px; color: var(--muted); }
+table.lim td:nth-child(1) { font-weight: 600; }
+table.ver td:nth-child(2) { font-family: var(--font-mono); font-size: 13.5px; white-space: nowrap; }
+.pc-warn { color: var(--warn); font-weight: 600; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.7; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: 0.88em; background: var(--accent-soft); padding: 0.05em 0.35em; border-radius: 4px; }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 40px 20px 80px; display: grid; gap: 56px; }
+.read { max-width: 72ch; }
+
+header.top { display: grid; gap: 18px; }
+.eyebrow { font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.3; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 4vw, 42px); font-weight: 700; }
+h2 { font-size: 26px; font-weight: 700; display: flex; gap: 12px; align-items: baseline; }
+h2 .n { font-family: var(--font-mono); font-size: 15px; color: var(--accent); font-weight: 500; }
+h3 { font-size: 19px; font-weight: 600; }
+p { margin: 0; }
+.lead { font-size: 18px; max-width: 68ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+.pill.ok { border-color: var(--accent); color: var(--accent); }
+.pill.wait { border-style: dashed; border-color: var(--line-strong); color: var(--ink); }
+
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 2px; }
+.stat b { font-family: var(--font-display); font-size: 24px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+.decide { background: var(--surface); border: 1px solid var(--accent); border-radius: 12px; padding: 16px 18px; display: grid; gap: 8px; }
+.decide h3 { font-size: 16px; }
+.decide ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; font-size: 15px; }
+
+nav.toc ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 20px; }
+nav.toc a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); display: block; padding: 4px 0; font-size: 15px; }
+nav.toc a span { font-family: var(--font-mono); color: var(--accent); margin-right: 8px; font-size: 13px; }
+
+section { display: grid; gap: 20px; scroll-margin-top: 16px; }
+
+figure.fig { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 14px; display: grid; gap: 12px; }
+.fig-scroll { overflow-x: auto; }
+.fig-scroll svg { display: block; width: 100%; height: auto; min-width: 780px; color: var(--ink); font-family: var(--font-body); }
+figcaption { font-size: 14px; color: var(--muted); max-width: 95ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 28px; height: 0; border-top: 2px solid var(--ink); vertical-align: middle; margin-right: 6px; }
+.legend i.async { border-top-style: dashed; border-color: var(--accent); }
+.legend i.ghost { border-color: var(--line-strong); border-top-style: dotted; }
+
+/* SVG 다이어그램: 색은 모두 토큰에서 */
+.dg .frame { fill: none; stroke: var(--line-strong); stroke-width: 1.2; }
+.dg .frame.ours { stroke: var(--accent); }
+.dg .box { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1; }
+.dg .box.ext { stroke-dasharray: 5 4; }
+.dg .box.db { fill: var(--accent-soft); stroke: var(--accent); }
+.dg .band { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+.dg .note { fill: var(--accent-soft); stroke: none; }
+.dg .ghost { opacity: 0.5; }
+.dg .edge { fill: none; stroke: currentColor; stroke-width: 1.5; }
+.dg .edge.async { stroke: var(--accent); stroke-dasharray: 6 4; }
+.dg .edge.soft { stroke: var(--line-strong); stroke-dasharray: 3 3; }
+.dg .edge.ret { stroke-dasharray: 2 4; }
+.dg .life { stroke: var(--line-strong); stroke-dasharray: 4 5; stroke-width: 1; }
+.dg .mk { fill: currentColor; }
+.dg .mk-a { fill: var(--accent); }
+.dg text { fill: currentColor; font-size: 12px; }
+.dg .tt { font-size: 13px; font-weight: 700; font-family: var(--font-display); }
+.dg .tm { font-family: var(--font-mono); font-size: 11.5px; }
+.dg .tt.tm { font-size: 12.5px; font-weight: 600; }
+.dg .ts { font-size: 11px; fill: var(--muted); }
+.dg .tl { fill: var(--accent); }
+.dg .seg-none { fill: none; stroke: var(--line-strong); stroke-dasharray: 5 4; }
+.dg .seg-cov { fill: var(--ink); fill-opacity: 0.14; stroke: var(--ink); stroke-opacity: 0.5; }
+.dg .seg-live { fill: var(--accent-soft); stroke: var(--accent); }
+.dg .seg-now { fill: var(--accent); }
+.dg .bar-rec { fill: var(--accent); stroke: var(--surface); stroke-width: 1.5; }
+.dg .bar-rest { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; }
+.dg .tick { stroke: var(--line-strong); stroke-width: 1; }
+
+.tbl { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.6; }
+th, td { text-align: left; vertical-align: top; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font-family: var(--font-display); font-weight: 600; font-size: 13.5px; color: var(--muted); background: var(--bg); white-space: nowrap; }
+td.k { font-weight: 600; white-space: nowrap; }
+td .alt, td.alt { color: var(--muted); }
+tr.later td { color: var(--muted); }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 6px; white-space: nowrap; border: 1px solid var(--ink); }
+.tag.async { border-color: var(--accent); color: var(--accent); border-style: dashed; }
+.tag.bg { border-color: var(--accent); color: var(--accent); }
+table.wide { min-width: 960px; }
+table.mid { min-width: 820px; }
+table.tree td:first-child { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+table.tree tr.grp td { background: var(--bg); font-family: var(--font-display); font-weight: 600; font-size: 13.5px; color: var(--muted); }
+
+.callout { border-left: 3px solid var(--accent); background: var(--surface); padding: 12px 16px; border-radius: 0 10px 10px 0; font-size: 15px; max-width: 95ch; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; align-content: start; }
+.card h3 { font-size: 15.5px; font-family: var(--font-mono); font-weight: 500; }
+.card ul { margin: 0; padding-left: 1.1em; font-size: 14px; display: grid; gap: 2px; }
+.card .pk { color: var(--accent); }
+.card p { font-size: 13px; color: var(--muted); }
+
+ol.tasks { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+ol.tasks > li { display: grid; grid-template-columns: 170px 1fr; gap: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+ol.tasks h3 { font-size: 15.5px; font-family: var(--font-mono); font-weight: 500; }
+ol.tasks ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; font-size: 14.5px; }
+
+.risk { display: grid; gap: 10px; }
+.risk div { display: grid; grid-template-columns: 86px 1fr; gap: 14px; align-items: start; padding: 12px 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); font-size: 14.5px; }
+.risk b { font-size: 12.5px; font-family: var(--font-mono); padding: 2px 8px; border-radius: 6px; text-align: center; border: 1px solid var(--line-strong); color: var(--muted); }
+.risk b.hi { border-color: var(--accent); color: var(--accent); }
+
+footer { font-size: 14px; color: var(--muted); display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 20px; }
+
+@media (max-width: 720px) {
+  .wrap { gap: 44px; padding: 28px 16px 60px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  ol.tasks > li { grid-template-columns: 1fr; gap: 8px; }
+  .risk div { grid-template-columns: 1fr; gap: 6px; }
+  .risk b { justify-self: start; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">anthill · 모의 트레이딩 · 1단계 설계 보고서</div>
+  <h1>anthill 1단계 아키텍처</h1>
+  <p class="lead">1단계는 업비트 원화 마켓 전 종목의 캔들을 모아 업비트와 숫자가 정확히 같은 차트를 그리고, 진행 중인 캔들을 1초마다 움직입니다. 서비스는 도메인별로 나눕니다. 서비스끼리의 비동기 통신은 지금은 REST로 하고, 나중에 Kafka로 옮길 수 있게 만듭니다. 이 보고서는 서비스 구성, 동기와 비동기의 구분, 주식을 붙이는 방법, 기술 선택 이유를 정리합니다.</p>
+  <div class="meta">
+    <span class="pill">2026-11-05</span>
+    <span class="pill ok">차트 설계 승인됨</span>
+    <span class="pill wait">서비스 분리안 검토 중</span>
+    <span class="pill">구현 전</span>
+  </div>
+  <div class="stats" aria-label="1단계 핵심 숫자">
+    <div class="stat"><b>3개</b><span>1단계 서비스: edge-gateway, marketdata-service, upbit-adapter</span></div>
+    <div class="stat"><b>299</b><span>업비트 KRW 종목 전부 수집 (2026-11-04 기준)</span></div>
+    <div class="stat"><b>1초</b><span>진행 중 캔들을 화면에 보내는 간격</span></div>
+    <div class="stat"><b>9회/초</b><span>업비트 REST 요청 상한 (업비트 한도 10회에서 여유 1회)</span></div>
+  </div>
+  <div class="decide">
+    <h3>이번에 정한 것</h3>
+    <ul>
+      <li><b>사용자 결정:</b> 서비스를 도메인별로 나누고 서로 상호작용하게 한다. 서비스 사이에는 나중에 Kafka를 둔다. 지금은 REST로 통신한다.</li>
+      <li><b>사용자 결정:</b> 기술 스택은 최신 LTS로 한다. LTS가 없는 도구는 최신 정식 버전으로 한다. 그래서 JDK 25, Node.js 26, PostgreSQL 18로 올렸다.</li>
+      <li><b>제안 (승인 전):</b> 1단계 서비스 3개 구성, 이벤트 계약(봉투·키·eventId)을 처음부터 Kafka 기준으로 만들고 전송만 REST로 하는 방식, 주식은 소스별 어댑터를 추가하는 방식. 승인하시면 설계 문서와 구현 계획을 이 구성에 맞게 고칩니다.</li>
+    </ul>
+  </div>
+</header>
+
+<nav class="toc" aria-label="목차">
+  <ol>
+    <li><a href="#decisions"><span>01</span>결정 기록 한눈에 보기</a></li>
+    <li><a href="#services"><span>02</span>서비스 구성 (지금: REST)</a></li>
+    <li><a href="#kafka"><span>03</span>나중: Kafka로 옮길 때</a></li>
+    <li><a href="#limits"><span>04</span>실시간으로 못 받는 것과 이유</a></li>
+    <li><a href="#stocks"><span>05</span>주식을 붙이는 방법</a></li>
+    <li><a href="#live"><span>06</span>1초마다 움직이는 캔들</a></li>
+    <li><a href="#history"><span>07</span>차트 열기와 과거 스크롤</a></li>
+    <li><a href="#coverage"><span>08</span>거래 없음과 아직 안 받음</a></li>
+    <li><a href="#budget"><span>09</span>정합성 검사와 요청 예산</a></li>
+    <li><a href="#recovery"><span>10</span>끊김 복구</a></li>
+    <li><a href="#stack"><span>11</span>기술 스택과 버전</a></li>
+    <li><a href="#structure"><span>12</span>프로젝트 구조</a></li>
+    <li><a href="#model"><span>13</span>데이터 모델</a></li>
+    <li><a href="#tasks"><span>14</span>구현 순서</a></li>
+    <li><a href="#risks"><span>15</span>남은 위험</a></li>
+  </ol>
+</nav>
+
+<!-- 결정 기록 -->
+<section id="decisions">
+  <h2><span class="n">01</span>결정 기록 한눈에 보기</h2>
+  <p class="read">지금까지 정한 것을 결정 하나에 한 줄씩 모았습니다. 줄마다 결정, 그렇게 정한 이유, 버린 대안과 버린 이유, 근거, 누가 정했는지를 적었습니다. <span class="did">D1</span> 같은 번호는 아래 구성도에도 같은 번호로 붙어 있어서, 그림의 어느 부분이 어떤 결정에서 나왔는지 바로 찾을 수 있습니다.</p>
+  <div class="legend">
+    <span><span class="st">사용자 결정</span> 사용자가 직접 정함</span>
+    <span><span class="st ok">승인</span> 제안했고 승인받음</span>
+    <span><span class="st wait">검토 중</span> 이번 서비스 분리안에 포함, 승인 전</span>
+  </div>
+  <div class="tbl">
+    <table class="dec wide">
+      <thead><tr><th>#</th><th>결정</th><th>왜</th><th>버린 대안 → 버린 이유</th><th>근거</th><th>상태</th></tr></thead>
+      <tbody>
+        <tr class="grp"><td colspan="6">정확도</td></tr>
+        <tr><td><span class="did">D1</span></td><td>업비트를 기준 시세로 두고, 마감 캔들은 업비트와 100% 일치</td><td>차트가 틀리면 그 위에 얹을 모의 체결, 수익률, 커뮤니티 반응이 모두 신뢰를 잃음</td><td>근사치 허용 → 사용자가 거절</td><td>사용자 요구</td><td><span class="st">사용자 결정</span></td></tr>
+        <tr><td><span class="did">D2</span></td><td>캔들을 직접 계산하지 않고 단위별로 소스에서 받아 저장</td><td>1분봉을 합쳐 1시간봉을 만들면 거래대금이 소수점 8번째 자리에서 어긋남</td><td>1분봉만 받아 상위 단위 계산 → 업비트와 불일치</td><td>2026-11-04 실측</td><td><span class="st ok">승인</span></td></tr>
+        <tr><td><span class="did">D3</span></td><td>숫자는 <code>NUMERIC</code>으로 저장하고, 값 기준으로 비교하고, API에서는 문자열로 보냄</td><td>업비트가 같은 값을 다른 자릿수로 줌 (<code>…39229000</code>, <code>…3922900000000000</code>). 실수형(float)은 끝자리가 바뀜</td><td>double 저장 → 정확도 원칙 위반</td><td>2026-11-05 실측</td><td><span class="st ok">승인</span></td></tr>
+        <tr><td><span class="did">D4</span></td><td>소스에서 확인을 끝낸 구간(coverage)을 따로 기록</td><td>거래가 없는 분에는 캔들이 없어서, "거래 없음"과 "아직 안 받음"을 구분해야 누락 0을 증명할 수 있음</td><td>빈 분을 0이나 직전 값으로 채움 → 업비트에 없는 캔들이 생김</td><td>KRW-OPG 1분봉 94% 공백 실측</td><td><span class="st ok">승인</span></td></tr>
+        <tr><td><span class="did">D5</span></td><td>최소 단위는 1분, 진행 중 캔들은 1초마다 갱신</td><td>사용자 요구. 업비트 분봉 메시지는 약 3초 간격이라, 체결로 갱신하고 1초씩 묶어서 보냄</td><td>초봉 제공 → 사용자가 제외 / 분봉 메시지만 사용 → 3초 간격</td><td>75초에 23건 실측</td><td><span class="st">사용자 결정</span></td></tr>
+        <tr><td><span class="did">D6</span></td><td>마감 캔들은 REST로 다시 받아 대조 (1·3·5분봉은 5분 안, 그 외는 한 주기 안)</td><td>웹소켓 캔들은 베타 기능이라 끊김이나 누락이 있을 수 있음</td><td>웹소켓 값만 믿음 → 맞는지 증명할 방법이 없음</td><td>업비트 문서 (베타 명시)</td><td><span class="st ok">승인</span></td></tr>
+        <tr><td><span class="did">D7</span></td><td>업비트 REST는 초당 9회, 우선순위 4단계로 사용</td><td>한도가 IP당 초당 10회. 사용자 조회가 과거 데이터 채우기 뒤에서 기다리면 안 됨</td><td>범용 속도 제한 라이브러리 → 우선순위 기능 없음</td><td>업비트 문서</td><td><span class="st ok">승인</span></td></tr>
+        <tr class="grp"><td colspan="6">구조</td></tr>
+        <tr><td><span class="did">D8</span></td><td>도메인별 서비스 3개: edge-gateway, marketdata-service, upbit-adapter</td><td>소스 규칙(형식·한도)을 어댑터 안에 가두고, 2단계 이후 도메인을 따로 배포하고 늘릴 수 있음</td><td>하나의 큰 앱 → 사용자가 도메인 분리를 선택</td><td>사용자 요구</td><td><span class="st wait">검토 중</span></td></tr>
+        <tr><td><span class="did">D9</span></td><td>서비스 간 비동기는 지금 이벤트를 묶어 REST로 보내고, 나중에 Kafka로 바꿈</td><td>1단계는 보내는 쪽과 받는 쪽이 몇 개뿐이라 브로커 운영 부담이 큼. 계약은 Kafka 기준으로 만들어서 전송 방식만 바꾸면 됨</td><td>처음부터 Kafka → 사용자가 나중으로 결정</td><td>사용자 요구</td><td><span class="st">사용자 결정</span></td></tr>
+        <tr><td><span class="did">D10</span></td><td>결과를 받아야 다음 일을 할 수 있으면 동기, 아니면 비동기</td><td>나중에 Kafka로 옮길 것(비동기)과 REST로 남을 것(동기)이 처음부터 갈림</td><td>모두 REST 호출 → 나중에 어디까지 바꿔야 할지 불분명</td><td>—</td><td><span class="st wait">검토 중</span></td></tr>
+        <tr><td><span class="did">D11</span></td><td>서비스 간 계약은 공통 라이브러리(<code>market-contract</code>, <code>event-bus</code>)로 공유</td><td>서비스끼리 형식이 어긋나면 컴파일 단계에서 잡힘</td><td>서비스마다 같은 형식을 복사 → 어긋남을 실행 중에야 발견</td><td>—</td><td><span class="st wait">검토 중</span></td></tr>
+        <tr class="grp"><td colspan="6">범위와 출처</td></tr>
+        <tr><td><span class="did">D12</span></td><td>1단계는 코인만, 외부에 공개하지 않음</td><td>주식 시세를 일반인에게 보여주려면 계약이 먼저 필요함 (04절)</td><td>주식을 함께 개발 → 계약 전에는 공개할 수 없음</td><td>한국투자증권 API 포털 안내</td><td><span class="st ok">승인</span></td></tr>
+        <tr><td><span class="did">D13</span></td><td>기준 시세: 한국 주식은 KRX+NXT 통합, 미국 주식은 전체 거래소 통합(SIP)</td><td>NXT가 정규장 거래량의 약 27.7%를 차지하고, 미국은 거래소가 여러 곳이라 하나만 받으면 거래량이 빠짐</td><td>KRX만, IEX만 → 거래량 누락</td><td>실측 정리, 비교 자료</td><td><span class="st ok">승인</span></td></tr>
+        <tr><td><span class="did">D14</span></td><td>커뮤니티 반응은 마지막 단계로 미룸</td><td>주요 국내 커뮤니티는 자동 수집이 막혀 있음 (04절)</td><td>크롤링 강행 → 민사 배상 위험 (야놀자·여기어때 사건 2심 약 10억 원)</td><td>robots.txt, 약관, 판례</td><td><span class="st">사용자 결정</span></td></tr>
+        <tr class="grp"><td colspan="6">기술</td></tr>
+        <tr><td><span class="did">D15</span></td><td>버전은 최신 LTS, LTS가 없는 도구는 최신 정식 버전</td><td>지원 기간이 길어 보안 패치를 오래 받음. 이 PC의 Node.js 25는 이미 지원이 끝났음</td><td>설치된 JDK 21, Node 25 그대로 사용 → 지원 기간이 짧거나 이미 끝남</td><td>endoflife.date (2026-11-07)</td><td><span class="st">사용자 결정</span></td></tr>
+        <tr><td><span class="did">D16</span></td><td>Spring MVC + 가상 스레드</td><td>웹소켓 몇 개, REST 초당 수십 회 수준은 블로킹 코드로 충분하고 디버깅이 쉬움</td><td>WebFlux + 코루틴 → 복잡도만 늘어남</td><td>—</td><td><span class="st wait">검토 중</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 01 -->
+<section id="services">
+  <h2><span class="n">02</span>서비스 구성 (지금: REST)</h2>
+  <p class="read">1단계 서비스는 세 개입니다. <b>edge-gateway</b>는 브라우저가 들어오는 유일한 입구입니다. <b>marketdata-service</b>는 시세·차트 도메인을 맡고 DB를 소유합니다. <b>upbit-adapter</b>는 업비트라는 외부 소스를 감싸는 어댑터입니다. 주식은 같은 계약을 지키는 어댑터(kis-adapter, massive-adapter)를 추가하는 것으로 붙고, marketdata-service는 바뀌지 않습니다. 실선은 응답을 기다리는 <b>동기</b> 호출이고, 점선은 보내고 끝나는 <b>비동기</b> 이벤트·푸시입니다.</p>
+
+  <figure class="fig">
+    <div class="fig-scroll">
+      <svg class="dg" viewBox="0 0 1180 710" role="img" aria-label="브라우저는 edge-gateway로만 들어오고, gateway는 조회를 marketdata-service로 동기 전달하며 marketdata가 1초 묶음으로 보내는 캔들 이벤트를 브라우저에 푸시한다. marketdata는 어댑터에 동기 조회를 하고 어댑터는 체결 이벤트를 비동기로 보낸다. 업비트 어댑터는 1단계, 한국투자증권과 Massive 어댑터는 나중에 같은 계약으로 붙는다.">
+        <defs>
+          <marker id="fa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="fal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-a" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+
+        <!-- 브라우저 -->
+        <rect class="frame" x="20" y="30" width="180" height="300" rx="10"/>
+        <text class="tt" x="110" y="54" text-anchor="middle">브라우저</text>
+        <text class="ts" x="110" y="70" text-anchor="middle">React SPA</text>
+        <rect class="box" x="36" y="92" width="148" height="44" rx="6"/>
+        <text x="110" y="110" text-anchor="middle">REST 클라이언트</text>
+        <text class="ts tm" x="110" y="127" text-anchor="middle">api/client.ts</text>
+        <rect class="box" x="36" y="188" width="148" height="44" rx="6"/>
+        <text x="110" y="206" text-anchor="middle">StreamClient</text>
+        <text class="ts" x="110" y="223" text-anchor="middle">끊기면 재연결·재구독</text>
+        <rect class="box" x="36" y="256" width="148" height="58" rx="6"/>
+        <text x="110" y="280" text-anchor="middle">종목 목록 · 차트</text>
+        <text class="ts tm" x="110" y="298" text-anchor="middle">lightweight-charts</text>
+
+        <!-- edge-gateway -->
+        <rect class="frame ours" x="250" y="30" width="250" height="300" rx="10"/>
+        <text class="tt tm" x="375" y="54" text-anchor="middle">edge-gateway</text>
+        <text class="ts" x="375" y="70" text-anchor="middle">브라우저의 단일 입구 · :8080</text>
+        <rect class="box" x="266" y="88" width="218" height="52" rx="6"/>
+        <text class="tt" x="282" y="108">REST 라우팅</text>
+        <text class="tm" x="282" y="128">/api/** → marketdata</text>
+        <rect class="box" x="266" y="170" width="218" height="92" rx="6"/>
+        <text class="tt" x="282" y="190">WebSocket 허브 /ws</text>
+        <text x="282" y="210">구독 관리 · 세션별 전달</text>
+        <text class="ts" x="282" y="228">이벤트 받는 곳 /internal/events</text>
+        <text class="ts" x="282" y="246">4단계 로그인 확인도 여기서</text>
+        <text class="ts" x="375" y="300" text-anchor="middle">상태 없음 · 여러 대로 늘릴 수 있음</text>
+
+        <!-- marketdata-service -->
+        <rect class="frame ours" x="550" y="30" width="610" height="300" rx="10"/>
+        <text class="tt tm" x="855" y="54" text-anchor="middle">marketdata-service</text>
+        <text class="ts" x="855" y="70" text-anchor="middle">시세·차트 도메인 · :8081 · DB 소유</text>
+        <rect class="box" x="566" y="88" width="200" height="52" rx="6"/>
+        <text class="tt" x="582" y="108">조회 API · 동기</text>
+        <text class="tm" x="582" y="128">/api/candles · markets</text>
+        <rect class="box" x="566" y="170" width="200" height="92" rx="6"/>
+        <text class="tt" x="582" y="190">실시간 캔들 · 비동기</text>
+        <text class="tm" x="582" y="210">LiveCandleBook</text>
+        <text x="582" y="228">체결·분봉 반영, 마감 판정</text>
+        <text class="ts" x="582" y="246">1초마다 바뀐 캔들 발행</text>
+        <rect class="box" x="786" y="88" width="358" height="174" rx="6"/>
+        <text class="tt" x="802" y="108">백그라운드 작업 · 비동기</text>
+        <text class="tm" x="802" y="134">Reconciler</text><text class="ts" x="950" y="134">5초마다 검사할 구간 고름</text>
+        <text class="tm" x="802" y="158">Recovery</text><text class="ts" x="950" y="158">연결 상태 이벤트로 시작</text>
+        <text class="tm" x="802" y="182">InitialBackfill</text><text class="ts" x="950" y="182">남는 예산으로 과거 채움</text>
+        <text class="tm" x="802" y="206">MarketRefresher</text><text class="ts" x="950" y="206">10분마다 종목 갱신</text>
+        <text class="tm" x="802" y="240">CandleSync</text><text class="ts" x="950" y="240">소스 조회는 모두 여기를 거침</text>
+        <rect class="box" x="566" y="278" width="578" height="40" rx="6"/>
+        <text x="855" y="303" text-anchor="middle">어댑터 연결부 · 점선 = 이벤트 받음 · 실선 = 소스 조회</text>
+
+        <!-- PostgreSQL -->
+        <rect class="box db" x="300" y="400" width="200" height="52" rx="6"/>
+        <text class="tt" x="400" y="422" text-anchor="middle">PostgreSQL 18</text>
+        <text class="ts" x="400" y="440" text-anchor="middle">marketdata 전용 DB</text>
+        <polyline class="edge" points="550,300 525,300 525,426 502,426" marker-end="url(#fa)"/>
+        <text class="ts" x="518" y="384" text-anchor="end">JDBC</text>
+
+        <!-- 어댑터 -->
+        <rect class="box" x="640" y="420" width="170" height="140" rx="6"/>
+        <text class="tt tm" x="725" y="442" text-anchor="middle">upbit-adapter</text>
+        <text class="ts" x="725" y="458" text-anchor="middle">코인 · 1단계 · :8082</text>
+        <text x="725" y="482" text-anchor="middle">스트림 수집 · 정규화</text>
+        <text x="725" y="500" text-anchor="middle">REST · 요청 예산 9/s</text>
+        <text class="ts tm" x="725" y="526" text-anchor="middle">UPBIT:KRW-BTC</text>
+        <text class="ts" x="625" y="490" text-anchor="end">소스가 늘어도 같은 계약</text>
+        <text class="ts" x="625" y="506" text-anchor="end">marketdata는 그대로</text>
+
+        <line class="edge async" x1="690" y1="420" x2="690" y2="321" marker-end="url(#fal)"/>
+        <line class="edge" x1="760" y1="318" x2="760" y2="417" marker-end="url(#fa)"/>
+        <text class="tl" x="684" y="372" text-anchor="end">이벤트 묶음</text>
+        <text x="766" y="372">구간 조회</text>
+
+        <rect class="box ext" x="640" y="620" width="170" height="70" rx="6"/>
+        <text class="tt" x="725" y="642" text-anchor="middle">업비트</text>
+        <text class="ts tm" x="725" y="660" text-anchor="middle">WebSocket · REST v1</text>
+        <text class="ts" x="725" y="678" text-anchor="middle">코인 · 1단계</text>
+        <line class="edge async" x1="690" y1="620" x2="690" y2="563" marker-end="url(#fal)"/>
+        <line class="edge" x1="760" y1="560" x2="760" y2="617" marker-end="url(#fa)"/>
+        <text class="tl" x="684" y="596" text-anchor="end">WS 푸시</text>
+        <text x="766" y="596">HTTPS</text>
+
+        <g class="ghost">
+          <rect class="box ext" x="830" y="420" width="150" height="140" rx="6"/>
+          <text class="tt tm" x="905" y="442" text-anchor="middle">kis-adapter</text>
+          <text class="ts" x="905" y="458" text-anchor="middle">한국 주식 · 나중</text>
+          <text x="905" y="482" text-anchor="middle">통합 체결 수집</text>
+          <text x="905" y="500" text-anchor="middle">분봉 REST</text>
+          <text class="ts tm" x="905" y="526" text-anchor="middle">KRX:005930</text>
+          <line class="edge async" x1="870" y1="420" x2="870" y2="321" marker-end="url(#fal)"/>
+          <line class="edge" x1="940" y1="318" x2="940" y2="417" marker-end="url(#fa)"/>
+          <rect class="box ext" x="830" y="620" width="150" height="70" rx="6"/>
+          <text class="tt" x="905" y="642" text-anchor="middle">한국투자증권</text>
+          <text class="ts" x="905" y="660" text-anchor="middle">공개 시 코스콤</text>
+          <text class="ts" x="905" y="678" text-anchor="middle">KRX + NXT 통합</text>
+          <line class="edge async" x1="870" y1="620" x2="870" y2="563" marker-end="url(#fal)"/>
+          <line class="edge" x1="940" y1="560" x2="940" y2="617" marker-end="url(#fa)"/>
+
+          <rect class="box ext" x="1000" y="420" width="160" height="140" rx="6"/>
+          <text class="tt tm" x="1080" y="442" text-anchor="middle">massive-adapter</text>
+          <text class="ts" x="1080" y="458" text-anchor="middle">미국 주식 · 나중</text>
+          <text x="1080" y="482" text-anchor="middle">SIP 체결 수집</text>
+          <text x="1080" y="500" text-anchor="middle">1분봉 REST</text>
+          <text class="ts tm" x="1080" y="526" text-anchor="middle">US:AAPL</text>
+          <line class="edge async" x1="1040" y1="420" x2="1040" y2="321" marker-end="url(#fal)"/>
+          <line class="edge" x1="1110" y1="318" x2="1110" y2="417" marker-end="url(#fa)"/>
+          <rect class="box ext" x="1000" y="620" width="160" height="70" rx="6"/>
+          <text class="tt" x="1080" y="642" text-anchor="middle">Massive</text>
+          <text class="ts" x="1080" y="660" text-anchor="middle">구 Polygon.io</text>
+          <text class="ts" x="1080" y="678" text-anchor="middle">미국 전체 거래소 (SIP)</text>
+          <line class="edge async" x1="1040" y1="620" x2="1040" y2="563" marker-end="url(#fal)"/>
+          <line class="edge" x1="1110" y1="560" x2="1110" y2="617" marker-end="url(#fa)"/>
+        </g>
+
+        <!-- 위쪽: 브라우저 ↔ gateway ↔ marketdata -->
+        <line class="edge" x1="184" y1="114" x2="263" y2="114" marker-end="url(#fa)"/>
+        <text class="ts" x="224" y="106" text-anchor="middle">HTTP</text>
+        <line class="edge" x1="484" y1="114" x2="563" y2="114" marker-end="url(#fa)"/>
+        <text class="ts" x="524" y="106" text-anchor="middle">전달</text>
+        <line class="edge async" x1="566" y1="216" x2="487" y2="216" marker-end="url(#fal)"/>
+        <text class="tl" x="526" y="206" text-anchor="middle">1초 묶음</text>
+        <line class="edge async" x1="264" y1="210" x2="187" y2="210" marker-start="url(#fal)" marker-end="url(#fal)"/>
+        <text class="tl" x="225" y="200" text-anchor="middle">WS</text>
+
+        <!-- 결정 번호 배지 -->
+        <g class="dbadge"><rect x="1110" y="42" width="30" height="16" rx="8"/><text x="1125" y="54" text-anchor="middle">D8</text></g>
+        <g class="dbadge"><rect x="728" y="94" width="30" height="16" rx="8"/><text x="743" y="106" text-anchor="middle">D3</text></g>
+        <g class="dbadge"><rect x="728" y="176" width="30" height="16" rx="8"/><text x="743" y="188" text-anchor="middle">D5</text></g>
+        <g class="dbadge"><rect x="1106" y="124" width="30" height="16" rx="8"/><text x="1121" y="136" text-anchor="middle">D6</text></g>
+        <g class="dbadge"><rect x="1106" y="230" width="30" height="16" rx="8"/><text x="1121" y="242" text-anchor="middle">D2</text></g>
+        <g class="dbadge"><rect x="1106" y="290" width="34" height="16" rx="8"/><text x="1123" y="302" text-anchor="middle">D11</text></g>
+        <g class="dbadge"><rect x="462" y="406" width="30" height="16" rx="8"/><text x="477" y="418" text-anchor="middle">D4</text></g>
+        <g class="dbadge"><rect x="511" y="226" width="30" height="16" rx="8"/><text x="526" y="238" text-anchor="middle">D9</text></g>
+        <g class="dbadge"><rect x="650" y="380" width="30" height="16" rx="8"/><text x="665" y="392" text-anchor="middle">D9</text></g>
+        <g class="dbadge"><rect x="776" y="536" width="30" height="16" rx="8"/><text x="791" y="548" text-anchor="middle">D7</text></g>
+        <g class="dbadge"><rect x="944" y="538" width="34" height="16" rx="8"/><text x="961" y="550" text-anchor="middle">D12</text></g>
+        <g class="dbadge"><rect x="600" y="640" width="34" height="16" rx="8"/><text x="617" y="652" text-anchor="middle">D13</text></g>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i></i>동기 · 요청하고 응답을 기다림</span>
+      <span><i class="async"></i>비동기 · 이벤트나 푸시, 보내고 끝남</span>
+      <span><i class="ghost"></i>흐리게 = 나중 단계</span>
+      <span><span class="did">D1</span> 등 = 01절 결정 번호 (동기·비동기를 나눈 기준은 <span class="did">D10</span>)</span>
+    </div>
+    <figcaption>위쪽 띠는 브라우저와의 통신입니다. 조회는 동기로 gateway를 거쳐 marketdata로 가고, 실시간 캔들은 marketdata → gateway → 브라우저로 비동기 푸시됩니다. 아래쪽은 소스와의 통신입니다. 어댑터는 외부 소스의 웹소켓을 받아 정규화한 이벤트를 marketdata로 비동기로 보내고, marketdata는 필요할 때 어댑터에 구간을 동기로 조회합니다. 종목 ID에 소스 접두어(<code>UPBIT:</code>, <code>KRX:</code>, <code>US:</code>)를 붙여 여러 소스를 한 테이블에서 구분합니다.</figcaption>
+  </figure>
+
+  <h3>동기와 비동기를 이렇게 나눴습니다</h3>
+  <p class="read">기준은 하나입니다. <b>호출한 쪽이 결과를 받아야 다음 일을 할 수 있으면 동기</b>, 그렇지 않으면 비동기입니다. 동기 호출은 Kafka를 도입한 뒤에도 REST로 남고, 비동기만 Kafka로 옮겨 갑니다.</p>
+  <div class="tbl">
+    <table class="wide">
+      <thead><tr><th>상호작용</th><th>구분</th><th>지금 (1단계)</th><th>나중</th><th>이유</th></tr></thead>
+      <tbody>
+        <tr><td>브라우저 → gateway → marketdata<br><span class="alt">과거 캔들·종목 조회</span></td><td><span class="tag">동기</span></td><td>HTTP GET</td><td>그대로</td><td>화면이 응답을 받아야 그릴 수 있음</td></tr>
+        <tr><td>marketdata → 어댑터<br><span class="alt">소스 캔들 구간 조회</span></td><td><span class="tag">동기</span></td><td><code>GET /internal/candles</code>, 우선순위 포함</td><td>그대로</td><td>받은 값을 바로 DB와 비교해야 함. 요청 한도는 소스마다 규칙이 달라 어댑터가 관리</td></tr>
+        <tr><td>marketdata → 어댑터<br><span class="alt">종목 목록·티커 스냅샷</span></td><td><span class="tag">동기</span></td><td><code>GET /internal/instruments</code>, <code>/internal/tickers</code></td><td>그대로, 변경분은 이벤트로</td><td>시작할 때 전체 목록이 한 번 필요함</td></tr>
+        <tr><td>어댑터 → marketdata<br><span class="alt">체결·분봉·티커·연결 상태</span></td><td><span class="tag async">비동기</span></td><td><code>POST /internal/events</code>, 200ms 묶음</td><td>Kafka <code>market.*</code></td><td>초당 수십~수백 건이고 보내는 쪽이 처리 결과를 기다릴 이유가 없음. 2단계부터는 trading도 같은 체결을 받음</td></tr>
+        <tr><td>marketdata → gateway<br><span class="alt">진행 중·마감·정정 캔들, 티커</span></td><td><span class="tag async">비동기</span></td><td><code>POST /internal/events</code>, 1초 묶음</td><td>Kafka <code>chart.*</code></td><td>1초 갱신 원칙 그대로. gateway를 여러 대로 늘려도 각자 받음</td></tr>
+        <tr><td>gateway → 브라우저<br><span class="alt">1초 푸시</span></td><td><span class="tag async">비동기</span></td><td>WebSocket <code>/ws</code></td><td>그대로</td><td>서버가 먼저 보내야 하는 데이터</td></tr>
+        <tr><td>gateway → marketdata<br><span class="alt">지금 화면에서 보고 있는 종목</span></td><td><span class="tag async">비동기</span></td><td><code>POST /internal/events</code>, 10초마다</td><td>Kafka <code>realtime.viewing</code></td><td>정합성 검사 우선순위에만 쓰임. 조금 늦어도 문제없음</td></tr>
+        <tr><td>marketdata 내부<br><span class="alt">정합성 검사·복구·과거 채우기·종목 갱신</span></td><td><span class="tag bg">백그라운드</span></td><td>스케줄러 + 가상 스레드</td><td>그대로</td><td>사용자 요청과 상관없이 돌아야 하고, 화면 응답을 붙잡으면 안 됨</td></tr>
+        <tr><td>어댑터 ↔ 외부 소스</td><td><span class="tag async">비동기</span> <span class="tag">동기</span></td><td>WebSocket 구독 · HTTPS 조회</td><td>그대로</td><td>외부 소스의 규칙을 따름</td></tr>
+        <tr class="later"><td>브라우저 → gateway → trading<br><span class="alt">2단계 · 모의 주문 접수</span></td><td><span class="tag">동기</span></td><td>—</td><td>REST</td><td>주문이 접수됐는지 바로 알려줘야 함</td></tr>
+        <tr class="later"><td>trading → portfolio · ranking · gateway<br><span class="alt">2단계 · 체결 결과</span></td><td><span class="tag async">비동기</span></td><td>—</td><td>Kafka <code>trading.order-filled</code></td><td>여러 서비스가 각자 반영하고, 잃으면 안 됨. Kafka 전환 뒤에 들임</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 02 -->
+<section id="kafka">
+  <h2><span class="n">03</span>나중: Kafka로 옮길 때</h2>
+  <p class="read">Kafka를 들이면 비동기 화살표만 Kafka를 거치게 바뀝니다. 동기 조회(과거 캔들, 주문 접수, 잔고 조회)는 그대로 REST입니다. 2단계 이후 서비스들도 이 그림 안에서 이벤트를 발행하고 구독하는 식으로 붙습니다.</p>
+  <figure class="fig">
+    <div class="fig-scroll">
+      <svg class="dg" viewBox="0 0 1180 500" role="img" aria-label="Kafka 도입 후: 시세 어댑터와 marketdata, community가 토픽에 발행하고 marketdata, gateway, trading, portfolio, ranking이 구독한다. 과거 캔들 조회, 주문 접수 같은 동기 호출은 Kafka를 거치지 않고 REST로 남는다.">
+        <defs>
+          <marker id="fb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="fbl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-a" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <polyline class="edge" points="40,395 22,395 22,20 620,20 620,37" marker-end="url(#fb)"/>
+        <text class="ts" x="330" y="14" text-anchor="middle">동기 REST · 과거 캔들 조회는 Kafka를 거치지 않음</text>
+
+        <rect class="box" x="40" y="40" width="380" height="110" rx="8"/>
+        <text class="tt" x="230" y="66" text-anchor="middle">시세 어댑터</text>
+        <text class="tm" x="230" y="86" text-anchor="middle">upbit · kis · massive</text>
+        <text class="ts" x="230" y="106" text-anchor="middle">소스마다 하나 · 같은 이벤트 형식</text>
+        <text class="ts" x="230" y="124" text-anchor="middle">1단계는 upbit만</text>
+        <rect class="box" x="480" y="40" width="280" height="110" rx="8"/>
+        <text class="tt tm" x="620" y="66" text-anchor="middle">marketdata-service</text>
+        <text class="ts" x="620" y="86" text-anchor="middle">시세·차트 · 1단계</text>
+        <text class="ts" x="620" y="106" text-anchor="middle">DB 소유</text>
+        <line class="edge" x1="480" y1="124" x2="423" y2="124" marker-end="url(#fb)"/>
+        <text class="ts" x="451" y="116" text-anchor="middle">조회</text>
+        <g class="ghost">
+          <rect class="box ext" x="820" y="40" width="320" height="110" rx="8"/>
+          <text class="tt tm" x="980" y="66" text-anchor="middle">community-service</text>
+          <text class="ts" x="980" y="86" text-anchor="middle">커뮤니티 반응 · Python · 6단계</text>
+          <line class="edge async" x1="980" y1="150" x2="980" y2="217" marker-end="url(#fbl)"/>
+          <text class="tl" x="988" y="190">발행 reaction-minute</text>
+        </g>
+
+        <rect class="band" x="40" y="220" width="1100" height="64" rx="8"/>
+        <text class="tt" x="60" y="246">Kafka (나중)</text>
+        <g class="dbadge"><rect x="1096" y="230" width="30" height="16" rx="8"/><text x="1111" y="242" text-anchor="middle">D9</text></g>
+        <text class="ts" x="60" y="268">토픽 키 = 종목 ID라서 종목별 순서가 지켜짐 · 소비자는 eventId로 중복 제거</text>
+
+        <line class="edge async" x1="230" y1="150" x2="230" y2="217" marker-end="url(#fbl)"/>
+        <text class="tl" x="238" y="190">발행 market.trade · candle · ticker · status</text>
+        <line class="edge async" x1="560" y1="220" x2="560" y2="153" marker-end="url(#fbl)"/>
+        <text class="tl" x="568" y="176">구독 market.*</text>
+        <line class="edge async" x1="680" y1="150" x2="680" y2="217" marker-end="url(#fbl)"/>
+        <text class="tl" x="688" y="200">발행 chart.*</text>
+
+        <rect class="box" x="40" y="360" width="260" height="70" rx="8"/>
+        <text class="tt tm" x="170" y="386" text-anchor="middle">edge-gateway</text>
+        <text class="ts" x="170" y="406" text-anchor="middle">라우팅 · WS 푸시 · 1단계</text>
+        <line class="edge async" x1="170" y1="284" x2="170" y2="357" marker-end="url(#fbl)"/>
+        <text class="tl" x="178" y="326">구독 chart.* · order-filled</text>
+
+        <g class="ghost">
+          <rect class="box ext" x="340" y="360" width="220" height="70" rx="8"/>
+          <text class="tt tm" x="450" y="386" text-anchor="middle">trading-service</text>
+          <text class="ts" x="450" y="406" text-anchor="middle">모의 주문·체결 · 2단계</text>
+          <line class="edge async" x1="380" y1="284" x2="380" y2="357" marker-end="url(#fbl)"/>
+          <text class="tl" x="388" y="312">구독 market.trade</text>
+          <line class="edge async" x1="530" y1="360" x2="530" y2="287" marker-end="url(#fbl)"/>
+          <text class="tl" x="538" y="342">발행 order-filled</text>
+
+          <rect class="box ext" x="600" y="360" width="200" height="70" rx="8"/>
+          <text class="tt tm" x="700" y="386" text-anchor="middle">portfolio-service</text>
+          <text class="ts" x="700" y="406" text-anchor="middle">잔고·손익 · 3단계</text>
+          <line class="edge async" x1="700" y1="284" x2="700" y2="357" marker-end="url(#fbl)"/>
+          <text class="tl" x="708" y="326">구독 order-filled</text>
+
+          <rect class="box ext" x="840" y="360" width="140" height="70" rx="8"/>
+          <text class="tt tm" x="910" y="386" text-anchor="middle">ranking-service</text>
+          <text class="ts" x="910" y="406" text-anchor="middle">랭킹·시즌 · 5단계</text>
+          <line class="edge async" x1="910" y1="284" x2="910" y2="357" marker-end="url(#fbl)"/>
+          <text class="tl" x="918" y="326">구독 order-filled</text>
+
+          <rect class="box ext" x="1010" y="360" width="130" height="70" rx="8"/>
+          <text class="tt tm" x="1075" y="386" text-anchor="middle">member-service</text>
+          <text class="ts" x="1075" y="406" text-anchor="middle">회원·인증 · 4단계</text>
+
+          <polyline class="edge" points="170,430 170,470 1075,470"/>
+          <line class="edge" x1="450" y1="470" x2="450" y2="433" marker-end="url(#fb)"/>
+          <line class="edge" x1="700" y1="470" x2="700" y2="433" marker-end="url(#fb)"/>
+          <line class="edge" x1="910" y1="470" x2="910" y2="433" marker-end="url(#fb)"/>
+          <line class="edge" x1="1075" y1="470" x2="1075" y2="433" marker-end="url(#fb)"/>
+          <text class="ts" x="620" y="490" text-anchor="middle">동기 REST · 주문 접수 · 잔고·랭킹 조회 · 로그인 확인 (전환 후에도 그대로)</text>
+        </g>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i></i>동기 REST</span>
+      <span><i class="async"></i>비동기 · Kafka 발행/구독</span>
+      <span><i class="ghost"></i>흐리게 = 2단계 이후</span>
+    </div>
+    <figcaption>1단계의 세 서비스(어댑터, marketdata, gateway)는 그대로이고, 그 사이의 점선만 Kafka를 지나도록 바뀝니다. 주문 체결(<code>order-filled</code>)처럼 잃으면 안 되는 이벤트는 Kafka를 들인 뒤에 도입합니다.</figcaption>
+  </figure>
+
+  <h3>바꿀 때 무엇이 바뀌나</h3>
+  <p class="read">이벤트를 보내는 코드는 <code>EventPublisher</code> 인터페이스에만 의존합니다. 지금은 그 뒤에 HTTP로 묶어 보내는 구현을 두고, 나중에 Kafka 구현을 추가해 설정으로 바꿉니다. 이벤트 형식, 키, 소비 쪽 핸들러는 그대로입니다.</p>
+  <figure class="fig">
+    <div class="fig-scroll">
+      <svg class="dg" viewBox="0 0 1000 210" role="img" aria-label="도메인 코드는 EventPublisher 인터페이스로만 발행한다. 지금은 HttpEventTransport가 POST /internal/events로 보내고, 나중에는 KafkaEventTransport가 Kafka 토픽으로 보내며, 양쪽 모두 같은 핸들러에 도착한다.">
+        <defs>
+          <marker id="fc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <rect class="box" x="20" y="80" width="140" height="60" rx="6"/>
+        <text x="90" y="106" text-anchor="middle">도메인 코드</text>
+        <text class="ts" x="90" y="124" text-anchor="middle">이벤트를 만든다</text>
+        <rect class="box" x="200" y="80" width="180" height="60" rx="6"/>
+        <text class="tm" x="290" y="106" text-anchor="middle">EventPublisher</text>
+        <text class="ts" x="290" y="124" text-anchor="middle">인터페이스 · 봉투·키·eventId</text>
+        <rect class="box" x="440" y="24" width="180" height="56" rx="6"/>
+        <text class="tm" x="530" y="48" text-anchor="middle">HttpEventTransport</text>
+        <text class="ts" x="530" y="66" text-anchor="middle">지금 · 묶어서 POST</text>
+        <rect class="box" x="680" y="24" width="180" height="56" rx="6"/>
+        <text class="tm" x="770" y="48" text-anchor="middle">/internal/events</text>
+        <text class="ts" x="770" y="66" text-anchor="middle">EventInbox · 중복 제거</text>
+        <rect class="box db" x="900" y="80" width="88" height="60" rx="6"/>
+        <text x="944" y="106" text-anchor="middle">같은</text>
+        <text x="944" y="124" text-anchor="middle">핸들러</text>
+        <line class="edge" x1="160" y1="110" x2="197" y2="110" marker-end="url(#fc)"/>
+        <polyline class="edge" points="380,100 410,100 410,52 437,52" marker-end="url(#fc)"/>
+        <line class="edge" x1="620" y1="52" x2="677" y2="52" marker-end="url(#fc)"/>
+        <polyline class="edge" points="860,52 880,52 880,100 897,100" marker-end="url(#fc)"/>
+        <g class="ghost">
+          <rect class="box ext" x="440" y="140" width="180" height="56" rx="6"/>
+          <text class="tm" x="530" y="164" text-anchor="middle">KafkaEventTransport</text>
+          <text class="ts" x="530" y="182" text-anchor="middle">나중 · 키 = 종목 ID</text>
+          <rect class="box ext" x="680" y="140" width="180" height="56" rx="6"/>
+          <text class="tm" x="770" y="164" text-anchor="middle">Kafka 토픽</text>
+          <text class="ts" x="770" y="182" text-anchor="middle">컨슈머 그룹 · 중복 제거</text>
+          <polyline class="edge" points="380,120 410,120 410,168 437,168" marker-end="url(#fc)"/>
+          <line class="edge" x1="620" y1="168" x2="677" y2="168" marker-end="url(#fc)"/>
+          <polyline class="edge" points="860,168 880,168 880,120 897,120" marker-end="url(#fc)"/>
+        </g>
+      </svg>
+    </div>
+    <figcaption>이벤트 봉투는 <code>{eventId, type, version, key, occurredAt, producer, payload}</code>입니다. Kafka는 같은 메시지를 두 번 줄 수 있으므로, 지금부터 소비 쪽이 최근 eventId를 기억해 중복을 버리게 만듭니다. 순서는 지금은 소비자마다 보내는 스레드를 하나로 두어 지키고, 나중에는 키(종목 ID) 파티션으로 지킵니다.</figcaption>
+  </figure>
+
+  <div class="tbl">
+    <table class="wide">
+      <thead><tr><th>이벤트 (나중 토픽 이름)</th><th>발행</th><th>구독</th><th>키</th><th>지금 보내는 방식</th></tr></thead>
+      <tbody>
+        <tr><td><code>market.trade.v1</code></td><td>각 어댑터</td><td>marketdata <span class="alt">(2단계부터 trading)</span></td><td>종목 ID</td><td>200ms 묶음 POST</td></tr>
+        <tr><td><code>market.candle.v1</code></td><td>소스가 분봉을 주는 어댑터 (업비트)</td><td>marketdata</td><td>종목 ID</td><td>200ms 묶음 POST</td></tr>
+        <tr><td><code>market.ticker.v1</code></td><td>각 어댑터</td><td>marketdata</td><td>종목 ID</td><td>200ms 묶음 POST</td></tr>
+        <tr><td><code>market.stream-status.v1</code></td><td>각 어댑터</td><td>marketdata (복구 시작, 스트림 구간 신뢰 판단)</td><td>소스</td><td>연결·끊김 즉시 POST</td></tr>
+        <tr><td><code>market.instrument.v1</code></td><td>각 어댑터</td><td>marketdata</td><td>종목 ID</td><td>목록이 바뀔 때 POST</td></tr>
+        <tr><td><code>chart.candle-update.v1</code></td><td>marketdata</td><td>gateway</td><td>종목 ID</td><td>1초 묶음 POST (live · closed · corrected · removed)</td></tr>
+        <tr><td><code>chart.ticker-update.v1</code></td><td>marketdata</td><td>gateway</td><td>종목 ID</td><td>1초 묶음 POST</td></tr>
+        <tr><td><code>realtime.viewing.v1</code></td><td>gateway</td><td>marketdata</td><td>gateway 인스턴스</td><td>10초마다 POST</td></tr>
+        <tr class="later"><td><code>trading.order-filled.v1</code></td><td>trading (2단계)</td><td>portfolio, ranking, gateway</td><td>사용자 ID</td><td>Kafka 전환 뒤 도입</td></tr>
+        <tr class="later"><td><code>community.reaction-minute.v1</code></td><td>community (6단계)</td><td>marketdata, gateway</td><td>종목 ID</td><td>Kafka 전환 뒤 도입</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="callout">지금 방식의 한계: REST 전달은 받는 서비스가 내려가 있는 동안의 이벤트를 잃습니다(보내는 쪽은 짧게 재시도만 함). 시세 이벤트는 marketdata가 다시 뜰 때 업비트 REST로 빈 구간을 다시 맞추므로(10절 복구) 정확도에 영향이 없습니다. 주문 체결처럼 잃으면 안 되는 이벤트는 Kafka로 바꾼 뒤에 도입합니다.</p>
+</section>
+
+<!-- 실시간 수집 한계 -->
+<section id="limits">
+  <h2><span class="n">04</span>실시간으로 못 받는 것과 이유</h2>
+  <p class="read">실시간으로 못 받는 이유는 세 가지로 나뉩니다. <b>소스가 그런 데이터를 주지 않는 경우</b>, <b>기술적으로는 받을 수 있지만 계약이나 약관이 막는 경우</b>, <b>비용이나 계정 위험이 큰 경우</b>입니다. 이유마다 근거와, 그 대신 하는 일과, 언제 풀리는지를 적었습니다.</p>
+  <div class="legend">
+    <span><span class="cv yes">됨</span> 지금 실시간으로 받음</span>
+    <span><span class="cv part">일부</span> 조건부이거나 간격이 있음</span>
+    <span><span class="cv no">안 됨</span> 지금은 받지 않음</span>
+  </div>
+  <div class="tbl">
+    <table class="lim wide">
+      <thead><tr><th>대상</th><th>실시간</th><th>왜</th><th>근거</th><th>대신 하는 것</th><th>언제 풀리나</th></tr></thead>
+      <tbody>
+        <tr class="grp"><td colspan="6">시세</td></tr>
+        <tr><td>업비트 코인 체결·티커</td><td><span class="cv yes">됨</span></td><td>업비트 공개 웹소켓이 체결이 생기는 즉시 보냄</td><td>2026-11-05 실측</td><td>—</td><td>—</td></tr>
+        <tr><td>업비트 분봉 메시지</td><td><span class="cv part">일부</span></td><td>체결마다 오지 않고 약 3초 간격으로 옴. 업비트도 베타 기능으로 표시함</td><td>75초에 23건 실측, 업비트 문서</td><td>체결로 진행 중 캔들을 갱신해 1초마다 보냄 <span class="did">D5</span></td><td>해당 없음</td></tr>
+        <tr><td>체결이 없는 초</td><td><span class="cv part">일부</span></td><td>거래가 없으면 가격이 바뀌지 않으니 어떤 스트림도 새 값을 주지 않음</td><td>KRW-BTC도 30초 중 7~13초만 갱신</td><td>캔들을 그대로 둠 (업비트 화면도 같음)</td><td>해당 없음</td></tr>
+        <tr><td>업비트 일·주·월봉</td><td><span class="cv part">일부</span></td><td>웹소켓 캔들은 분 단위까지만 있음</td><td>업비트 문서</td><td>일봉은 티커로 만듦 (값이 일봉과 일치함을 실측), 주·월봉은 체결로 갱신</td><td>해당 없음</td></tr>
+        <tr><td>한국 주식 (공개 화면)</td><td><span class="cv no">안 됨</span></td><td>기술적으로는 한국투자증권 웹소켓으로 받을 수 있음. 하지만 일반인에게 보여주려면 KRX 정보이용계약이 필요하고, 계약은 법인만 할 수 있음</td><td>한국투자증권 API 포털 안내, 코스콤 오픈API 문서</td><td>개발과 검증만 한국투자증권 API로 진행</td><td>법인 설립 후 KRX·코스콤 계약</td></tr>
+        <tr><td>한국 주식 전 종목</td><td><span class="cv part">일부</span></td><td>한국투자증권 웹소켓은 세션당 41종목까지 등록된다고 알려짐</td><td>서드파티 라이브러리 문서 (공식 미확인)</td><td>주요 종목만 실시간, 나머지는 REST로 주기 조회</td><td>세션 추가 또는 코스콤 계약</td></tr>
+        <tr><td>미국 주식 (공개 화면)</td><td><span class="cv no">안 됨</span></td><td>Massive 개인 플랜은 비전문가 개인 용도 전용이라 일반인에게 보여줄 수 없음. 비즈니스 계약은 가격이 공개돼 있지 않음</td><td>Massive 요금 정리 (제3자 자료)</td><td>개발 검증만 개인 플랜으로</td><td>비즈니스 계약 후</td></tr>
+        <tr><td>미국 주식 무료 실시간</td><td><span class="cv no">안 됨</span></td><td>Alpaca 무료 플랜은 IEX 한 거래소의 데이터만 줘서 거래량 일부만 잡힘. 기준 시세 원칙 <span class="did">D13</span>에 맞지 않음</td><td>시세 API 비교 자료</td><td>쓰지 않음</td><td>—</td></tr>
+        <tr class="grp"><td colspan="6">커뮤니티 반응</td></tr>
+        <tr><td>네이버 종목토론실</td><td><span class="cv no">안 됨</span></td><td>robots.txt가 <code>finance.naver.com</code>, <code>m.stock.naver.com</code> 전체를 막고 네이버 자체 봇만 허용. 약관도 자동 수집을 금지함</td><td>2026-11-04 robots.txt 직접 확인</td><td>제휴 문의 (키움증권 등 증권사에 종목토론실 API를 제공한 사례 있음)</td><td>제휴가 성사되면</td></tr>
+        <tr><td>디시인사이드 주식·코인 갤러리</td><td><span class="cv no">안 됨</span></td><td>약관이 자동 수집, AI 학습 목적 수집, 허락 없는 영리 이용을 금지함. robots.txt가 <code>stock_new</code>·<code>stock_new2</code> 갤러리를 따로 막음</td><td>약관, robots.txt 직접 확인</td><td>제휴 문의</td><td>제휴가 성사되면</td></tr>
+        <tr><td>에펨코리아</td><td><span class="cv no">안 됨</span></td><td>robots.txt가 일반 봇에게 홈·베스트·유머 게시판 말고는 모두 막음</td><td>robots.txt 직접 확인</td><td>—</td><td>—</td></tr>
+        <tr><td>토스증권 커뮤니티</td><td><span class="cv no">안 됨</span></td><td>앱 안에서만 보이고 공개 API가 없음</td><td>조사</td><td>—</td><td>—</td></tr>
+        <tr><td>Reddit</td><td><span class="cv no">안 됨</span></td><td>상업적으로 쓰려면 Reddit과 별도 계약이 필요하고 가격은 협상으로 정해짐</td><td>제3자 정리</td><td>—</td><td>계약하면</td></tr>
+        <tr><td>X (트위터)</td><td><span class="cv part">일부</span></td><td>공식 API로 받을 수 있지만 글 1건 조회에 약 $0.005라서 하루 1만 건이면 월 약 $1,500</td><td>제3자 정리</td><td>예산을 정한 뒤 키워드를 좁혀서</td><td>예산이 정해지면</td></tr>
+        <tr><td>텔레그램 공개 채널</td><td><span class="cv part">일부</span></td><td>개인 계정으로 접속하는 방식이라 많이 수집하면 계정이 정지될 수 있음. 수집 데이터로 AI 학습을 금지한다는 해석이 있음</td><td>제3자 문서</td><td>소량으로, 분류에만 사용</td><td>—</td></tr>
+        <tr><td>유튜브 댓글</td><td><span class="cv yes">됨</span></td><td>공식 Data API가 있고 하루 1만 유닛 무료, 댓글 목록 조회는 1회 1유닛</td><td>Google 문서</td><td>—</td><td>—</td></tr>
+        <tr><td>코인판·팍스넷·뽐뿌·클리앙</td><td><span class="cv part">일부</span></td><td>robots.txt는 게시판 수집을 허용함. 하지만 robots.txt는 법적 허가가 아니라서 약관 확인과 법률 검토가 필요함</td><td>robots.txt 직접 확인</td><td>원문 대신 통계·요약에 링크만 보여주는 방식 검토</td><td>법률 검토 후</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="callout">크롤링의 법적 위험: 야놀자·여기어때 사건에서 형사 부분은 대법원 무죄(2021도1533)였지만, 민사 2심에서는 부정경쟁행위로 인정돼 약 10억 원 배상 판결이 났습니다. 그래서 공개 서비스에서는 "기술적으로 받을 수 있는가"보다 "허락받았는가"가 먼저입니다. <span class="did">D14</span></p>
+</section>
+
+<!-- 03 -->
+<section id="stocks">
+  <h2><span class="n">05</span>주식을 붙이는 방법</h2>
+  <p class="read">주식은 소스마다 어댑터 서비스를 하나씩 추가해서 붙입니다. 어댑터는 외부 소스의 형식과 요청 한도를 안에 가두고, 밖으로는 같은 이벤트(<code>market.*</code>)와 같은 조회 API(<code>/internal/candles</code>)만 내놓습니다. 그래서 marketdata-service의 진행 중 캔들, 정합성 검사, 복구 구조를 그대로 다시 씁니다. 다만 소스마다 아래와 같은 차이가 있어서 어댑터와 marketdata 설정에서 흡수합니다.</p>
+  <div class="tbl">
+    <table class="wide">
+      <thead><tr><th></th><th>업비트 · 코인 (1단계)</th><th>한국투자증권 · 한국 주식</th><th>Massive · 미국 주식</th></tr></thead>
+      <tbody>
+        <tr><td class="k">어댑터</td><td><code>upbit-adapter</code></td><td><code>kis-adapter</code> (공개 시 코스콤 시세로 교체)</td><td><code>massive-adapter</code></td></tr>
+        <tr><td class="k">종목 ID</td><td><code>UPBIT:KRW-BTC</code></td><td><code>KRX:005930</code></td><td><code>US:AAPL</code></td></tr>
+        <tr><td class="k">기준 시세</td><td>업비트</td><td>KRX + NXT 통합 (NXT가 정규장 거래량의 약 27.7%)</td><td>미국 전체 거래소 통합 (SIP)</td></tr>
+        <tr><td class="k">실시간 입력</td><td>웹소켓 체결·분봉·티커</td><td>웹소켓 통합 체결 <code>H0UNCNT0</code></td><td>웹소켓 체결</td></tr>
+        <tr><td class="k">진행 중 캔들</td><td>체결로 갱신 + 업비트 분봉으로 맞춤</td><td>체결로 갱신 (실시간 분봉 제공 여부 확인 필요)</td><td>체결로 갱신 (분 단위 집계 스트림 확인 필요)</td></tr>
+        <tr><td class="k">마감 캔들 기준</td><td>업비트 REST 캔들</td><td>한국투자증권 분봉 조회 REST (과거 조회 기간 확인 필요)</td><td>Massive 1분 집계 REST</td></tr>
+        <tr><td class="k">거래 시간</td><td>24시간</td><td>NXT 포함 오전 8시~저녁 8시 (KST)</td><td>미 동부 기준 정규장·연장 거래</td></tr>
+        <tr><td class="k">일봉 경계</td><td>UTC 00:00 (KST 09:00)</td><td>한국 거래일</td><td>미국 거래일</td></tr>
+        <tr><td class="k">구독 한도</td><td>연결당 데이터 요청 초당 5회</td><td>세션당 실시간 41종목으로 알려짐 (공식 미확인)</td><td>플랜에 따라 다름</td></tr>
+        <tr><td class="k">공개 전 계약</td><td>업비트 약관 확인</td><td>KRX 정보이용계약 (법인), 코스콤 시세 라이선스</td><td>Massive 비즈니스 계약</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <ul class="read" style="margin:0; padding-left:1.2em; display:grid; gap:6px;">
+    <li><b>캔들 경계는 시장 달력으로 분리합니다.</b> 1단계의 단위 계산은 UTC 기준이라 코인에만 맞습니다. 주식 단계에서 시장마다 거래일과 장 시간을 아는 시장 달력을 두고, 캔들 경계 계산을 거기에 맡깁니다.</li>
+    <li><b>실시간 분봉이 없는 소스</b>는 체결만으로 진행 중 캔들을 만들고, 마감 캔들은 소스 REST로 맞춥니다. 1단계의 정합성 검사가 바로 이 일을 하므로 구조를 바꿀 필요가 없습니다.</li>
+    <li><b>구독 한도가 작은 소스</b>(한국투자증권 41종목)는 주요 종목만 실시간으로 받고, 나머지는 REST 주기 조회로 채웁니다. 이 판단은 어댑터 안에서 끝납니다.</li>
+  </ul>
+</section>
+
+<!-- 04 -->
+<section id="live">
+  <h2><span class="n">06</span>1초마다 움직이는 캔들</h2>
+  <p class="read">업비트 분봉 메시지는 약 3초 간격이라 그대로 보여주면 1초마다 움직이지 않습니다. 그래서 체결을 하나하나 받아 marketdata가 모든 단위의 진행 중 캔들(1분봉~월봉)을 메모리에서 갱신하고, 1초에 한 번 바뀐 것만 묶어 gateway로 보냅니다. gateway는 그 종목을 구독한 브라우저에만 전달합니다. 서비스 사이의 화살표는 모두 비동기입니다.</p>
+  <figure class="fig">
+    <div class="fig-scroll">
+      <svg class="dg" viewBox="0 0 1000 540" role="img" aria-label="업비트 체결과 분봉, 티커를 upbit-adapter가 이벤트로 묶어 marketdata로 보내고, marketdata의 LiveCandleBook이 모든 단위의 진행 중 캔들을 갱신한 뒤 1초마다 바뀐 캔들을 gateway로 보내며, gateway가 구독한 브라우저에 전달한다.">
+        <defs>
+          <marker id="sq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="sql" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk-a" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <rect class="box ext" x="35" y="16" width="150" height="40" rx="6"/><text class="tt" x="110" y="41" text-anchor="middle">업비트 웹소켓</text>
+        <rect class="box" x="235" y="16" width="150" height="40" rx="6"/><text class="tt tm" x="310" y="41" text-anchor="middle">upbit-adapter</text>
+        <rect class="box" x="435" y="16" width="150" height="40" rx="6"/><text class="tt tm" x="510" y="34" text-anchor="middle">marketdata</text><text class="ts tm" x="510" y="49" text-anchor="middle">LiveCandleBook</text>
+        <rect class="box" x="635" y="16" width="150" height="40" rx="6"/><text class="tt tm" x="710" y="41" text-anchor="middle">edge-gateway</text>
+        <rect class="box" x="835" y="16" width="130" height="40" rx="6"/><text class="tt" x="900" y="41" text-anchor="middle">브라우저</text>
+        <line class="life" x1="110" y1="56" x2="110" y2="524"/>
+        <line class="life" x1="310" y1="56" x2="310" y2="524"/>
+        <line class="life" x1="510" y1="56" x2="510" y2="524"/>
+        <line class="life" x1="710" y1="56" x2="710" y2="524"/>
+        <line class="life" x1="900" y1="56" x2="900" y2="524"/>
+
+        <text x="210" y="86" text-anchor="middle">체결 · 몰려서 옴</text>
+        <line class="edge async" x1="110" y1="94" x2="308" y2="94" marker-end="url(#sql)"/>
+        <text class="tm" x="410" y="112" text-anchor="middle">market.trade</text>
+        <line class="edge async" x1="310" y1="120" x2="508" y2="120" marker-end="url(#sql)"/>
+        <text class="ts" x="320" y="138">200ms 묶음</text>
+        <rect class="note" x="518" y="128" width="182" height="44" rx="5"/>
+        <text x="528" y="146">모든 단위의 현재 캔들</text>
+        <text x="528" y="163">종가·고가·저가·거래량 갱신</text>
+
+        <text x="210" y="200" text-anchor="middle">분봉 · 약 3초 간격</text>
+        <line class="edge async" x1="110" y1="208" x2="308" y2="208" marker-end="url(#sql)"/>
+        <text class="tm" x="410" y="226" text-anchor="middle">market.candle</text>
+        <line class="edge async" x1="310" y1="234" x2="508" y2="234" marker-end="url(#sql)"/>
+        <rect class="note" x="518" y="242" width="182" height="44" rx="5"/>
+        <text x="528" y="260">더 새로우면 업비트 값 그대로</text>
+        <text x="528" y="277">오래된 값이면 큰 쪽 유지</text>
+
+        <text x="210" y="314" text-anchor="middle">티커</text>
+        <line class="edge async" x1="110" y1="322" x2="308" y2="322" marker-end="url(#sql)"/>
+        <text class="tm" x="410" y="340" text-anchor="middle">market.ticker · 일봉</text>
+        <line class="edge async" x1="310" y1="348" x2="508" y2="348" marker-end="url(#sql)"/>
+
+        <rect class="note" x="440" y="370" width="140" height="26" rx="5"/>
+        <text x="510" y="388" text-anchor="middle">매 1초 · 바뀐 것만</text>
+        <text class="tm" x="610" y="414" text-anchor="middle">chart.candle-update</text>
+        <line class="edge async" x1="510" y1="422" x2="708" y2="422" marker-end="url(#sql)"/>
+        <rect class="note" x="640" y="432" width="140" height="26" rx="5"/>
+        <text x="710" y="450" text-anchor="middle">구독한 세션만 고름</text>
+        <text x="805" y="474" text-anchor="middle">WS · 세션당 1건</text>
+        <line class="edge async" x1="710" y1="482" x2="898" y2="482" marker-end="url(#sql)"/>
+        <rect class="note" x="820" y="494" width="160" height="26" rx="5"/>
+        <text class="tm" x="900" y="512" text-anchor="middle">update()로 반영</text>
+      </svg>
+    </div>
+    <figcaption>캔들 마감은 그 종목·단위에 다음 구간의 메시지가 오거나, 구간이 끝나고 10초가 지나면 일어납니다. 마감된 캔들은 마지막으로 받은 업비트 값으로 저장합니다. 그 1초 동안 체결이 없으면 보낼 것도 없습니다. 2026-11-05 실측에서 KRW-BTC도 30초 중 7~13초에만 갱신이 있었습니다.</figcaption>
+  </figure>
+</section>
+
+<!-- 05 -->
+<section id="history">
+  <h2><span class="n">07</span>차트 열기와 과거 스크롤</h2>
+  <p class="read">차트를 열면 최근 200개를, 과거로 스크롤하면 맨 앞 캔들 시각 이전 200개를 요청합니다. 이 흐름은 처음부터 끝까지 동기입니다. marketdata는 이미 확인한 구간이면 DB에서 바로 읽고, 아직 받지 않은 구간이면 어댑터에 조회해 DB를 맞춘 뒤 응답합니다.</p>
+  <figure class="fig">
+    <div class="fig-scroll">
+      <svg class="dg" viewBox="0 0 1060 600" role="img" aria-label="과거 캔들 요청은 gateway를 거쳐 marketdata로 가고, marketdata는 확인 구간을 DB에서 읽은 뒤 모자라면 upbit-adapter에 USER 우선순위로 조회해 업비트 200개를 받아 DB를 맞추고 오름차순으로 응답한다.">
+        <defs>
+          <marker id="hq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <rect class="box" x="15" y="16" width="130" height="40" rx="6"/><text class="tt" x="80" y="41" text-anchor="middle">브라우저</text>
+        <rect class="box" x="195" y="16" width="130" height="40" rx="6"/><text class="tt tm" x="260" y="41" text-anchor="middle">edge-gateway</text>
+        <rect class="box" x="375" y="16" width="130" height="40" rx="6"/><text class="tt tm" x="440" y="34" text-anchor="middle">marketdata</text><text class="ts tm" x="440" y="49" text-anchor="middle">CandleHistory</text>
+        <rect class="box db" x="555" y="16" width="130" height="40" rx="6"/><text class="tt" x="620" y="41" text-anchor="middle">DB</text>
+        <rect class="box" x="735" y="16" width="130" height="40" rx="6"/><text class="tt tm" x="800" y="34" text-anchor="middle">upbit-adapter</text><text class="ts" x="800" y="49" text-anchor="middle">요청 예산</text>
+        <rect class="box ext" x="915" y="16" width="130" height="40" rx="6"/><text class="tt" x="980" y="41" text-anchor="middle">업비트 REST</text>
+        <line class="life" x1="80" y1="56" x2="80" y2="584"/>
+        <line class="life" x1="260" y1="56" x2="260" y2="584"/>
+        <line class="life" x1="440" y1="56" x2="440" y2="584"/>
+        <line class="life" x1="620" y1="56" x2="620" y2="584"/>
+        <line class="life" x1="800" y1="56" x2="800" y2="584"/>
+        <line class="life" x1="980" y1="56" x2="980" y2="584"/>
+
+        <text class="tm" x="170" y="84" text-anchor="middle">GET /api/candles</text>
+        <line class="edge" x1="80" y1="92" x2="258" y2="92" marker-end="url(#hq)"/>
+        <text x="350" y="110" text-anchor="middle">전달</text>
+        <line class="edge" x1="260" y1="118" x2="438" y2="118" marker-end="url(#hq)"/>
+        <text x="530" y="140" text-anchor="middle">확인 구간 조회</text>
+        <line class="edge" x1="440" y1="148" x2="618" y2="148" marker-end="url(#hq)"/>
+        <text x="530" y="166" text-anchor="middle">[a, b) 확인됨</text>
+        <line class="edge ret" x1="620" y1="174" x2="442" y2="174" marker-end="url(#hq)"/>
+        <text x="530" y="196" text-anchor="middle">스트림 구간 + [a, b)</text>
+        <line class="edge" x1="440" y1="204" x2="618" y2="204" marker-end="url(#hq)"/>
+        <text x="530" y="222" text-anchor="middle">120개</text>
+        <line class="edge ret" x1="620" y1="230" x2="442" y2="230" marker-end="url(#hq)"/>
+        <rect class="note" x="290" y="242" width="140" height="44" rx="5"/>
+        <text x="300" y="260">200개에 모자람</text>
+        <text x="300" y="277">a 이전은 안 받음</text>
+
+        <text class="tm" x="620" y="304" text-anchor="middle">GET /internal/candles · USER</text>
+        <line class="edge" x1="440" y1="312" x2="798" y2="312" marker-end="url(#hq)"/>
+        <text class="tm" x="890" y="334" text-anchor="middle">to=a · count=200</text>
+        <line class="edge" x1="800" y1="342" x2="978" y2="342" marker-end="url(#hq)"/>
+        <text x="890" y="364" text-anchor="middle">최신→과거 200개</text>
+        <line class="edge ret" x1="980" y1="372" x2="802" y2="372" marker-end="url(#hq)"/>
+        <text x="620" y="392" text-anchor="middle">정규화해서 응답</text>
+        <line class="edge ret" x1="800" y1="400" x2="442" y2="400" marker-end="url(#hq)"/>
+        <text x="530" y="424" text-anchor="middle">비교 · upsert · delete</text>
+        <line class="edge" x1="440" y1="432" x2="618" y2="432" marker-end="url(#hq)"/>
+        <rect class="note" x="630" y="420" width="140" height="26" rx="5"/>
+        <text x="700" y="438" text-anchor="middle">확인 구간에 추가</text>
+
+        <text x="530" y="466" text-anchor="middle">나머지 80개 읽기</text>
+        <line class="edge" x1="440" y1="474" x2="618" y2="474" marker-end="url(#hq)"/>
+        <text x="350" y="502" text-anchor="middle">오름차순 200개 + live</text>
+        <line class="edge ret" x1="440" y1="510" x2="262" y2="510" marker-end="url(#hq)"/>
+        <text x="170" y="530" text-anchor="middle">그대로 전달</text>
+        <line class="edge ret" x1="260" y1="538" x2="82" y2="538" marker-end="url(#hq)"/>
+        <rect class="note" x="6" y="550" width="148" height="26" rx="5"/>
+        <text x="80" y="568" text-anchor="middle">스크롤하면 같은 방식</text>
+      </svg>
+    </div>
+    <figcaption>우선순위 <code>USER</code>는 요청에 실려 어댑터로 가고, 어댑터의 요청 예산이 이 요청을 과거 채우기보다 먼저 처리합니다. 응답의 숫자는 모두 문자열이고, 업비트에 200개 미만만 있으면 상장일까지 다 받은 것으로 보고 <code>hasMore: false</code>를 돌려줍니다. 거래가 드문 종목(KRW-OPG는 1분봉 200개가 3,494분에 걸침)도 확인 구간 기록 덕분에 같은 구간을 다시 받지 않습니다.</figcaption>
+  </figure>
+</section>
+
+<!-- 06 -->
+<section id="coverage">
+  <h2><span class="n">08</span>거래 없음과 아직 안 받음</h2>
+  <p class="read">업비트는 체결이 없던 시간의 캔들을 주지 않습니다. 그래서 DB에 캔들이 없다는 사실만으로는 거래가 없었던 건지 아직 받지 않은 건지 알 수 없습니다. 이를 구분하려고 marketdata는 종목·단위마다 <b>소스 REST로 확인을 끝낸 구간</b>(coverage)을 따로 기록합니다.</p>
+  <figure class="fig">
+    <div class="fig-scroll">
+      <svg class="dg" viewBox="0 0 1000 220" role="img" aria-label="한 종목 1분봉의 시간축: 7일 이전은 아직 안 받은 구간, 그 뒤 확인 구간 끝까지는 REST로 확인한 구간, 그 뒤 지금까지는 스트림이 이어 받는 구간, 맨 끝은 메모리의 진행 중 캔들이다.">
+        <defs>
+          <marker id="cv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk-a" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <text class="ts" x="40" y="24">예: KRW-BTC 1분봉의 시간축 (왼쪽이 과거)</text>
+        <rect class="seg-none" x="40" y="80" width="260" height="40"/>
+        <rect class="seg-cov" x="300" y="80" width="460" height="40"/>
+        <rect class="seg-live" x="760" y="80" width="155" height="40"/>
+        <rect class="seg-now" x="915" y="80" width="45" height="40"/>
+        <text x="170" y="105" text-anchor="middle">아직 안 받음</text>
+        <text x="530" y="105" text-anchor="middle">확인 구간 · 소스 REST로 확인 끝</text>
+        <text class="tl" x="837" y="105" text-anchor="middle">스트림 구간</text>
+        <text x="760" y="56" text-anchor="end" class="tl">정합성 검사가 확인 구간 끝을 계속 앞으로 밂</text>
+        <line class="edge async" x1="770" y1="52" x2="840" y2="52" marker-end="url(#cv)"/>
+        <line class="tick" x1="40" y1="120" x2="40" y2="134"/>
+        <line class="tick" x1="300" y1="120" x2="300" y2="134"/>
+        <line class="tick" x1="760" y1="120" x2="760" y2="134"/>
+        <line class="tick" x1="915" y1="120" x2="915" y2="134"/>
+        <line class="tick" x1="960" y1="120" x2="960" y2="134"/>
+        <text class="ts" x="40" y="150">상장일</text>
+        <text class="ts" x="300" y="150" text-anchor="middle">7일 전 (미리 채움 시작)</text>
+        <text class="ts" x="760" y="150" text-anchor="middle">확인 구간 끝</text>
+        <text class="ts" x="915" y="170" text-anchor="middle">현재 분 시작</text>
+        <text class="ts" x="960" y="150" text-anchor="end">지금</text>
+        <text class="ts" x="40" y="200">스크롤하면 소스에서 받아옴</text>
+        <text class="ts" x="530" y="200" text-anchor="middle">DB에서 바로 읽음</text>
+        <text class="ts" x="837" y="200" text-anchor="middle">스트림이 안 끊겼으면 DB에서 읽음</text>
+      </svg>
+    </div>
+    <figcaption>스트림 구간은 어댑터가 보낸 연결 상태 이벤트(<code>market.stream-status</code>)로 판단합니다. 연결이 확인 구간 끝보다 먼저 시작돼 그 뒤로 끊기지 않았을 때만 믿고, 끊긴 적이 있으면 그 구간은 소스에서 다시 받습니다. 맨 오른쪽 진행 중 캔들은 DB가 아니라 marketdata 메모리에 있습니다. 일·주·월봉은 상장일부터 전부 확인 구간입니다.</figcaption>
+  </figure>
+</section>
+
+<!-- 07 -->
+<section id="budget">
+  <h2><span class="n">09</span>정합성 검사와 요청 예산</h2>
+  <p class="read">마감된 캔들은 소스 REST로 다시 받아 저장값과 비교하고, 다르면 소스 값으로 덮어쓰고 기록을 남깁니다. 검사 시한은 1·3·5분봉이 마감 후 5분 이내, 10분 이상 단위가 다음 한 주기 이내입니다. 검사 작업은 marketdata의 백그라운드에서 돌고, 요청 예산은 소스 규칙을 아는 upbit-adapter가 관리합니다.</p>
+  <figure class="fig">
+    <div class="fig-scroll">
+      <svg class="dg" viewBox="0 0 1000 180" role="img" aria-label="업비트 REST 요청 예산 초당 9회 중 정기 정합성 검사가 약 3.4회를 쓰고, 나머지 약 5.6회를 사용자 조회, 복구, 과거 채우기가 우선순위대로 나눠 쓴다.">
+        <text class="ts" x="40" y="22">upbit-adapter의 초당 요청 수 (299종목 기준 추정)</text>
+        <rect class="bar-rec" x="40" y="62" width="112.5" height="40" fill-opacity="0.85"/>
+        <rect class="bar-rec" x="152.5" y="62" width="74.7" height="40" fill-opacity="0.65"/>
+        <rect class="bar-rec" x="227.2" y="62" width="55.8" height="40" fill-opacity="0.5"/>
+        <rect class="bar-rec" x="283" y="62" width="65.7" height="40" fill-opacity="0.35"/>
+        <rect class="bar-rest" x="348.7" y="62" width="501.3" height="40"/>
+        <text x="96" y="54" text-anchor="middle">1분 1.25</text>
+        <text x="190" y="54" text-anchor="middle">3분 0.83</text>
+        <text x="255" y="54" text-anchor="middle">5분 0.62</text>
+        <text x="316" y="54" text-anchor="middle">10분+ 0.73</text>
+        <text x="599" y="87" text-anchor="middle">사용자 조회 &gt; 복구 &gt; 과거 채우기 · 약 5.6</text>
+        <line class="edge" x1="850" y1="52" x2="850" y2="112"/>
+        <text class="tt" x="850" y="44" text-anchor="middle">우리 상한 9</text>
+        <line class="edge soft" x1="940" y1="52" x2="940" y2="112"/>
+        <text class="ts" x="940" y="44" text-anchor="middle">업비트 한도 10</text>
+        <line class="tick" x1="40" y1="118" x2="940" y2="118"/>
+        <g>
+          <line class="tick" x1="40" y1="118" x2="40" y2="124"/><text class="ts" x="40" y="140" text-anchor="middle">0</text>
+          <line class="tick" x1="130" y1="118" x2="130" y2="124"/><text class="ts" x="130" y="140" text-anchor="middle">1</text>
+          <line class="tick" x1="220" y1="118" x2="220" y2="124"/><text class="ts" x="220" y="140" text-anchor="middle">2</text>
+          <line class="tick" x1="310" y1="118" x2="310" y2="124"/><text class="ts" x="310" y="140" text-anchor="middle">3</text>
+          <line class="tick" x1="400" y1="118" x2="400" y2="124"/><text class="ts" x="400" y="140" text-anchor="middle">4</text>
+          <line class="tick" x1="490" y1="118" x2="490" y2="124"/><text class="ts" x="490" y="140" text-anchor="middle">5</text>
+          <line class="tick" x1="580" y1="118" x2="580" y2="124"/><text class="ts" x="580" y="140" text-anchor="middle">6</text>
+          <line class="tick" x1="670" y1="118" x2="670" y2="124"/><text class="ts" x="670" y="140" text-anchor="middle">7</text>
+          <line class="tick" x1="760" y1="118" x2="760" y2="124"/><text class="ts" x="760" y="140" text-anchor="middle">8</text>
+          <line class="tick" x1="850" y1="118" x2="850" y2="124"/><text class="ts" x="850" y="140" text-anchor="middle">9</text>
+          <line class="tick" x1="940" y1="118" x2="940" y2="124"/><text class="ts" x="940" y="140" text-anchor="middle">10</text>
+        </g>
+        <text class="ts" x="40" y="170">정기 정합성 검사 합계 약 3.4회/초 (진한 부분)</text>
+      </svg>
+    </div>
+    <figcaption>검사 주기 규칙: 확인 구간 끝 다음 캔들이 마감되고 여유 시간(1·3·5분봉은 3분, 그 외는 한 주기의 절반)이 지나면 검사합니다. 그래서 1분봉은 종목마다 약 4분, 3분봉은 6분, 5분봉은 8분에 한 번 요청합니다. 숫자는 이 규칙으로 계산한 추정치이고, 구현 때 시뮬레이션 테스트로 시한을 지키는지 확인합니다.</figcaption>
+  </figure>
+  <div class="tbl">
+    <table class="mid">
+      <thead><tr><th>우선순위</th><th>누가 요청하나 (marketdata)</th><th>언제</th></tr></thead>
+      <tbody>
+        <tr><td class="k">1. USER</td><td>사용자 과거 조회 (<code>CandleHistoryService</code>)</td><td>아직 받지 않은 구간을 화면이 요청했을 때. 사용자를 기다리게 하지 않으려고 가장 먼저</td></tr>
+        <tr><td class="k">2. RECOVERY</td><td>끊김·재시작 복구 (<code>Recovery</code>)</td><td>어댑터가 "다시 연결됨" 이벤트를 보낼 때마다. 이때는 정기 검사를 멈춤</td></tr>
+        <tr><td class="k">3. RECONCILE</td><td>정기 정합성 검사 (<code>Reconciler</code>)</td><td>5초마다 검사할 때가 된 (종목, 단위)를 고름. 보고 있는 종목 → 24시간 거래대금 순</td></tr>
+        <tr><td class="k">4. BACKFILL</td><td>과거 채우기 (<code>InitialBackfill</code>)</td><td>남는 예산으로. 일·주·월봉 전체 기간, 분 단위 최근 7일</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 08 -->
+<section id="recovery">
+  <h2><span class="n">10</span>끊김 복구</h2>
+  <p class="read">업비트 웹소켓이 끊긴 동안의 캔들은 우리 DB에 없습니다. 어댑터가 다시 연결되면 연결 상태 이벤트를 보내고, marketdata가 종목·단위마다 확인 구간 끝부터 지금까지를 어댑터에 조회해 채웁니다. marketdata 자신이 재시작했을 때도 시작하면서 같은 과정을 거칩니다.</p>
+  <figure class="fig">
+    <div class="fig-scroll">
+      <svg class="dg" viewBox="0 0 1000 120" role="img" aria-label="어댑터 웹소켓이 끊기면 재연결 후 상태 이벤트를 보내고, marketdata가 정기 검사를 멈춘 뒤 빈 구간을 채우고 정기 검사와 과거 채우기를 이어간다.">
+        <defs>
+          <marker id="rc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="mk" d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+        <rect class="box" x="12" y="24" width="140" height="62" rx="6"/>
+        <text x="82" y="50" text-anchor="middle">웹소켓 끊김</text><text class="ts tm" x="82" y="70" text-anchor="middle">upbit-adapter</text>
+        <rect class="box" x="176" y="24" width="140" height="62" rx="6"/>
+        <text x="246" y="50" text-anchor="middle">다시 연결</text><text class="ts" x="246" y="70" text-anchor="middle">상태 이벤트 발행</text>
+        <rect class="box" x="340" y="24" width="140" height="62" rx="6"/>
+        <text x="410" y="50" text-anchor="middle">정기 검사 멈춤</text><text class="ts tm" x="410" y="70" text-anchor="middle">marketdata</text>
+        <rect class="box db" x="504" y="24" width="160" height="62" rx="6"/>
+        <text x="584" y="50" text-anchor="middle">빈 구간 채우기</text><text class="ts" x="584" y="70" text-anchor="middle">5분 끊김 ≈ 2,400회</text>
+        <rect class="box" x="688" y="24" width="140" height="62" rx="6"/>
+        <text x="758" y="50" text-anchor="middle">정기 검사 재개</text><text class="ts" x="758" y="70" text-anchor="middle">약 4분 뒤</text>
+        <rect class="box" x="852" y="24" width="140" height="62" rx="6"/>
+        <text x="922" y="50" text-anchor="middle">과거 채우기 계속</text><text class="ts" x="922" y="70" text-anchor="middle">가장 낮은 우선순위</text>
+        <line class="edge" x1="152" y1="55" x2="174" y2="55" marker-end="url(#rc)"/>
+        <line class="edge async" x1="316" y1="55" x2="338" y2="55" marker-end="url(#rc)"/>
+        <line class="edge" x1="480" y1="55" x2="502" y2="55" marker-end="url(#rc)"/>
+        <line class="edge" x1="664" y1="55" x2="686" y2="55" marker-end="url(#rc)"/>
+        <line class="edge" x1="828" y1="55" x2="850" y2="55" marker-end="url(#rc)"/>
+        <text class="ts" x="584" y="108" text-anchor="middle">종목 × 분 단위 8종마다 1회씩 동기 조회 · 예산 초당 9회 전부 사용</text>
+      </svg>
+    </div>
+    <figcaption>복구로 받은 값은 그 자체가 소스에서 확인한 값이므로 따로 검증하지 않고 확인 구간에 바로 넣습니다. 완료 기준은 5분 끊김 기준 10분 이내 복구입니다. 개발 환경에서는 어댑터의 <code>POST /admin/stream/pause?seconds=300</code>으로 일부러 끊어서 시험합니다.</figcaption>
+  </figure>
+</section>
+
+<!-- 09 -->
+<section id="stack">
+  <h2><span class="n">11</span>기술 스택과 버전</h2>
+  <p class="read">기준은 네 가지였습니다. 업비트 숫자를 한 자리도 바꾸지 않고 다룰 수 있는가, 1초 실시간 갱신을 단순하게 구현할 수 있는가, 혼자서도 테스트로 정확도를 증명할 수 있는가, 도메인별 서비스가 나중에 Kafka로 갈아탈 때 코드를 크게 바꾸지 않아도 되는가.</p>
+  <div class="tbl">
+    <table class="wide">
+      <thead><tr><th>영역</th><th>선택</th><th>검토한 대안</th><th>선택 이유</th></tr></thead>
+      <tbody>
+        <tr><td class="k">서비스 구성</td><td>도메인별 Spring Boot 서비스<br><span class="alt">1단계 3개</span></td><td class="alt">하나의 큰 앱</td><td><b>사용자 결정.</b> 시세 소스마다 어댑터를 두면 외부 API의 형식과 요청 한도가 그 서비스 안에 갇힘. 2단계 이후 주문·포트폴리오·회원·랭킹·커뮤니티가 붙을 때 각자 배포하고 늘릴 수 있음.</td></tr>
+        <tr><td class="k">서비스 간 비동기</td><td>지금: 이벤트를 묶어 HTTP POST<br>나중: Kafka</td><td class="alt">처음부터 Kafka</td><td><b>사용자 결정.</b> 1단계는 생산자와 소비자가 각각 몇 개뿐이라 브로커 운영 부담에 비해 얻는 게 적음. 대신 이벤트 봉투·키·eventId와 소비 쪽 중복 제거를 지금부터 Kafka 기준으로 만들어, 전환할 때 전송 구현체만 바꿈.</td></tr>
+        <tr><td class="k">서비스 간 동기</td><td>REST (HTTP JSON)</td><td class="alt">gRPC</td><td>호출 수가 적고(소스 조회는 초당 9회 이하), 브라우저 도구와 curl로 바로 확인할 수 있어 디버깅이 쉬움.</td></tr>
+        <tr><td class="k">게이트웨이</td><td>Spring Cloud Gateway Server MVC + Spring WebSocket</td><td class="alt">Nginx, 직접 만든 프록시</td><td>라우팅을 설정으로 관리하고, 4단계 로그인 확인 필터를 같은 곳에 둠. Boot 4.1과 맞는 Spring Cloud 2025.1.x를 확인함(2026-11-05 Initializr 기준).</td></tr>
+        <tr><td class="k">빌드</td><td>Gradle 멀티 프로젝트<br><span class="alt">서비스 3 + 공통 라이브러리 2</span></td><td class="alt">서비스마다 저장소 분리</td><td>이벤트 계약(공통 타입)을 한 곳에서 바꾸고 함께 컴파일해서, 서비스끼리 형식이 어긋나면 컴파일 단계에서 잡힘.</td></tr>
+        <tr><td class="k">언어·런타임</td><td>Kotlin 2.3 · Spring Boot 4.1.2 · JDK 25</td><td class="alt">JDK 21, JDK 27</td><td><b>사용자 결정.</b> JDK 25가 가장 최신 LTS(지원 2031-09). 27은 더 새롭지만 LTS가 아니라 2027-03에 지원이 끝남. Kotlin은 Spring Boot 4.1이 관리하는 2.3을 씀. 버전 근거는 아래 표.</td></tr>
+        <tr><td class="k">동시성</td><td>Spring MVC + 가상 스레드</td><td class="alt">WebFlux + 코루틴</td><td>할 일은 웹소켓 몇 개, REST 초당 수십 회 수준. 가상 스레드면 블로킹 코드 그대로 감당함. 리액티브 스택은 디버깅·테스트 비용만 늘림.</td></tr>
+        <tr><td class="k">외부 소스 연결</td><td><code>java.net.http</code> (HttpClient · WebSocket)</td><td class="alt">Ktor client, OkHttp</td><td>JDK 내장이라 의존성이 없음. 업비트 웹소켓은 바이너리 프레임으로 와서 UTF-8로 직접 풀어야 하는데 JDK WebSocket으로 충분함.</td></tr>
+        <tr><td class="k">요청 제어</td><td>직접 만든 <code>RequestBudget</code> (우선순위 큐 + 토큰 버킷)</td><td class="alt">Resilience4j, Bucket4j</td><td>꼭 필요한 건 우선순위. 사용자 조회가 과거 채우기 뒤에서 기다리면 안 됨. 범용 속도 제한 라이브러리에는 우선순위 대기열이 없음.</td></tr>
+        <tr><td class="k">DB</td><td>PostgreSQL 18 (<code>NUMERIC</code>)<br><span class="alt">marketdata가 소유</span></td><td class="alt">TimescaleDB, InfluxDB, MongoDB</td><td><code>NUMERIC</code>은 소스 숫자를 소수점 끝자리까지 그대로 보관함. InfluxDB에는 정밀 소수 타입이 없음. 서비스마다 자기 DB를 갖는 원칙이라 2단계 trading은 별도 DB(같은 PostgreSQL 서버의 다른 DB로 시작). 커지면 TimescaleDB 확장을 얹을 수 있음.</td></tr>
+        <tr><td class="k">DB 접근</td><td><code>JdbcClient</code> + Flyway</td><td class="alt">JPA(Hibernate), jOOQ</td><td>쿼리는 upsert와 구간 조회 몇 개뿐이라 JPA의 엔티티 관리로 얻을 게 없음. 스키마는 Flyway로 버전 관리.</td></tr>
+        <tr><td class="k">서버 → 브라우저</td><td>순수 WebSocket + JSON</td><td class="alt">STOMP, SSE</td><td>브라우저가 (종목, 단위)를 구독하고 해제해야 해서 양방향이 필요함. 메시지 종류가 <code>candles</code>·<code>tickers</code> 둘뿐이라 STOMP는 과함.</td></tr>
+        <tr><td class="k">프론트</td><td>React 19 · TypeScript 7 · Vite 8 · Node.js 26 LTS</td><td class="alt">Next.js, Vue, Svelte</td><td>로그인과 검색 노출이 필요 없는 SPA. 2단계부터 주문창 같은 실시간 UI가 늘어나 컴포넌트 생태계가 큰 React가 유리. TypeScript로 서버 응답 형태를 고정.</td></tr>
+        <tr><td class="k">차트</td><td>Lightweight Charts 5.2.1</td><td class="alt">TradingView Advanced Charts, ECharts, Highcharts Stock</td><td>Apache 2.0, 금융 차트 전용이라 가벼움. <code>update()</code>로 진행 중 캔들을 1초마다 바꾸기 쉽고, 십자선·마커·가격선으로 범례, 2단계 체결 표시, 6단계 반응 툴팁까지 만들 수 있음. Advanced Charts는 별도 사용 신청이 필요하고, Highcharts는 상업용 라이선스가 유료.</td></tr>
+        <tr><td class="k">테스트</td><td>JUnit 5 · Testcontainers · 가짜 소스 · Vitest</td><td class="alt">H2, 실제 업비트 호출</td><td>H2는 <code>NUMERIC</code>·upsert 동작이 PostgreSQL과 달라 정확도 테스트에 맞지 않음. 실제 소스 응답은 계속 바뀌므로 규칙(<code>to</code> 배타적, 최신→과거, 최대 200개)을 흉내 내는 가짜를 씀. 서비스 사이 계약은 공통 라이브러리 타입으로 양쪽 테스트에서 함께 검증.</td></tr>
+        <tr><td class="k">운영 지표</td><td>Actuator · Micrometer</td><td class="alt">Prometheus + Grafana</td><td>1단계는 비공개 검증 단계라 지표 세 개(정정 건수, 검사 지연, 시한 초과)를 <code>/actuator/metrics</code>로 보면 충분.</td></tr>
+        <tr><td class="k">로컬 환경</td><td>Docker Compose</td><td class="alt">직접 설치</td><td>PostgreSQL과 서비스 3개를 명령 한 줄로 띄움. 나중에 Kafka(KRaft 모드) 컨테이너 하나를 추가.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>버전: 최신 LTS 기준 <span class="did">D15</span></h3>
+  <p class="read">LTS(장기 지원판)가 있는 도구는 가장 최신 LTS를 골랐습니다. JDK와 Node.js가 여기에 해당합니다. LTS 제도가 없는 도구는 최신 정식 버전을 고르고, 지원 기한을 함께 적었습니다. 기준일은 2026-11-07이고, 지원 기한은 endoflife.date 기준입니다.</p>
+  <div class="tbl">
+    <table class="ver wide">
+      <thead><tr><th>구성 요소</th><th>버전</th><th>LTS</th><th>지원 기한</th><th>고른 이유</th><th>이 PC 상태</th></tr></thead>
+      <tbody>
+        <tr><td class="k">JDK (Eclipse Temurin)</td><td>25.0.5</td><td>LTS</td><td>2031-09-30</td><td>가장 최신 LTS. 27은 더 새롭지만 LTS가 아니라 2027-03-23에 종료</td><td class="pc-warn">21·17만 있음 → 25 설치 필요</td></tr>
+        <tr><td class="k">Node.js</td><td>26.13.0</td><td>LTS (2026-10-28부터)</td><td>활성 지원 2027-10-27, 종료 2029-04-30</td><td>가장 최신 LTS</td><td class="pc-warn">25.5.0 (2026-06-01에 지원 종료) → 26 설치 필요</td></tr>
+        <tr><td class="k">Spring Boot</td><td>4.1.2</td><td>제도 없음</td><td>오픈소스 2027-07-31, 상용 2028-07-31</td><td>현재 최신 정식 버전. 4.2는 아직 정식 출시 전</td><td>Gradle이 받음</td></tr>
+        <tr><td class="k">Kotlin</td><td>2.3.21</td><td>제도 없음</td><td>—</td><td>Spring Boot 4.1이 관리하는 버전(Initializr로 JDK 25 프로젝트를 만들어 확인). 2.4가 최신이지만 Boot 4.1의 호환 보장 밖</td><td>Gradle이 받음</td></tr>
+        <tr><td class="k">Spring Cloud</td><td>2025.1.4</td><td>제도 없음</td><td>Boot 4.0~4.1용</td><td>gateway의 Spring Cloud Gateway Server MVC</td><td>Gradle이 받음</td></tr>
+        <tr><td class="k">Gradle</td><td>9.8.2</td><td>제도 없음</td><td>9.x 지원 중</td><td>Initializr가 넣는 wrapper 버전. 9.9.0은 2026-11-06에 막 나와서 쓰지 않음</td><td>9.4.1 설치됨 (wrapper가 맞는 버전을 받음)</td></tr>
+        <tr><td class="k">PostgreSQL</td><td>18.6</td><td>제도 없음 (메이저마다 5년)</td><td>2030-11-14</td><td>지원이 가장 긴 최신 메이저. 17에서 바꿈</td><td>Docker 이미지 <code>postgres:18</code></td></tr>
+        <tr><td class="k">React</td><td>19.3.1</td><td>제도 없음</td><td>현재 지원 라인</td><td>최신 정식 버전</td><td>npm이 받음</td></tr>
+        <tr><td class="k">TypeScript</td><td>7.0.2</td><td>제도 없음</td><td>—</td><td>최신 정식 버전(2026-07). 쓰는 도구가 7을 지원하지 않으면 6.0.3으로 내림</td><td>npm이 받음</td></tr>
+        <tr><td class="k">Vite · Vitest</td><td>8.3.x · 5.1.0</td><td>제도 없음</td><td>—</td><td>최신 정식 버전. 설치할 때의 정확한 버전을 lock 파일로 고정</td><td>npm이 받음</td></tr>
+        <tr><td class="k">Lightweight Charts</td><td>5.2.1</td><td>제도 없음</td><td>—</td><td>최신 정식 버전</td><td>npm이 받음</td></tr>
+        <tr class="later"><td class="k">Kafka (나중)</td><td>4.4.0</td><td>제도 없음</td><td>확장 지원 2028-10-27</td><td>현재 최신. 도입할 때 다시 확인</td><td>Docker 이미지</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 10 -->
+<section id="structure">
+  <h2><span class="n">12</span>프로젝트 구조</h2>
+  <p class="read">저장소 하나에 Gradle 멀티 프로젝트로 둡니다. 서비스끼리는 코드를 직접 참조하지 않고 <code>libs/</code>의 공통 계약만 공유합니다. marketdata 안에서 소스 데이터로 DB를 바꾸는 일은 모두 <code>CandleSync</code> 하나를 거칩니다. 비교 규칙(값 기준 비교, 확인 구간 기록, 정정 기록)을 한 곳에서만 지키기 위해서입니다.</p>
+  <div class="tbl">
+    <table class="tree mid">
+      <thead><tr><th>경로</th><th>책임</th></tr></thead>
+      <tbody>
+        <tr class="grp"><td colspan="2">루트</td></tr>
+        <tr><td>settings.gradle.kts</td><td>멀티 프로젝트 목록</td></tr>
+        <tr><td>docker-compose.yml</td><td>PostgreSQL 18 + 서비스 3개 (나중에 Kafka 추가)</td></tr>
+        <tr><td>docs/</td><td>설계 문서, 구현 계획, 이 보고서</td></tr>
+        <tr class="grp"><td colspan="2">libs/ · 서비스들이 공유하는 계약</td></tr>
+        <tr><td>libs/market-contract</td><td>종목 ID, 캔들 단위와 시각 경계, <code>Candle</code>, 값 기준 숫자 비교, 이벤트 payload 타입, 소스 조회 DTO</td></tr>
+        <tr><td>libs/event-bus</td><td>이벤트 봉투, <code>EventPublisher</code>·<code>EventHandler</code> 인터페이스, <code>HttpEventTransport</code>, <code>EventInbox</code>(중복 제거). 나중에 <code>KafkaEventTransport</code> 추가</td></tr>
+        <tr class="grp"><td colspan="2">services/upbit-adapter · :8082</td></tr>
+        <tr><td>stream/</td><td>업비트 웹소켓 연결·재연결·일시정지, 수신 파싱, <code>market.*</code> 이벤트로 정규화해 발행</td></tr>
+        <tr><td>rest/</td><td>업비트 REST 클라이언트, <code>RequestBudget</code>(우선순위·초당 9회), 429 백오프</td></tr>
+        <tr><td>api/</td><td><code>GET /internal/candles</code>·<code>instruments</code>·<code>tickers</code>, dev 프로필 <code>/admin/stream/pause</code></td></tr>
+        <tr class="grp"><td colspan="2">services/marketdata-service · :8081</td></tr>
+        <tr><td>ingest/</td><td>이벤트 수신(<code>/internal/events</code>) → 실시간 캔들로 전달, 연결 상태 추적</td></tr>
+        <tr><td>live/</td><td><code>LiveCandleBook</code>(진행 중 캔들 상태 기계), 1초 묶음 발행(<code>chart.*</code>), <code>TickerCache</code></td></tr>
+        <tr><td>candle/</td><td>저장소(candle·coverage·instrument), <code>CandleSync</code>, <code>CandleHistoryService</code></td></tr>
+        <tr><td>sync/</td><td><code>ReconcilePlanner</code>·<code>Reconciler</code>, <code>Recovery</code>, <code>InitialBackfill</code>, <code>MarketRefresher</code></td></tr>
+        <tr><td>api/ · tools/</td><td><code>/api/candles</code>·<code>/api/markets</code>, verify 프로필 대조 검사 도구</td></tr>
+        <tr class="grp"><td colspan="2">services/edge-gateway · :8080</td></tr>
+        <tr><td>routes</td><td><code>/api/**</code> → marketdata (설정 파일)</td></tr>
+        <tr><td>realtime/</td><td>WebSocket <code>/ws</code>, 세션별 구독 목록, <code>chart.*</code> 이벤트 수신 후 구독자에게 전달, <code>realtime.viewing</code> 발행</td></tr>
+        <tr class="grp"><td colspan="2">frontend/src · gateway만 바라봄</td></tr>
+        <tr><td>api/ · chart/ · markets/</td><td>REST·WS 클라이언트, KST 시간 변환과 갱신 규칙, 차트·범례, 종목 목록</td></tr>
+        <tr class="grp"><td colspan="2">나중에 추가</td></tr>
+        <tr><td>services/kis-adapter · massive-adapter</td><td>주식 소스 어댑터 (같은 계약)</td></tr>
+        <tr><td>services/trading · portfolio · member · ranking</td><td>2~5단계 도메인 서비스</td></tr>
+        <tr><td>services/community (Python)</td><td>6단계 커뮤니티 반응</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 11 -->
+<section id="model">
+  <h2><span class="n">13</span>데이터 모델</h2>
+  <p class="read">1단계에서 DB를 가진 서비스는 marketdata 하나입니다. 가격·거래량·거래대금은 모두 정밀도 제한 없는 <code>NUMERIC</code>, 시각은 <code>timestamptz</code>(UTC)입니다. 종목 ID에 소스 접두어가 있어서 주식이 붙어도 테이블을 바꾸지 않습니다.</p>
+  <div class="cards">
+    <div class="card"><h3>instrument</h3><ul><li><span class="pk">id</span> (키, 예: UPBIT:KRW-BTC)</li><li>source · symbol</li><li>korean_name · english_name</li><li>active · updated_at</li></ul><p>상장폐지되면 active만 false로 바꾸고 데이터는 남김</p></div>
+    <div class="card"><h3>candle</h3><ul><li><span class="pk">instrument_id · unit · start_at</span> (키)</li><li>open · high · low · close</li><li>volume · amount</li></ul><p>소스 캔들을 단위별로 그대로 저장</p></div>
+    <div class="card"><h3>coverage</h3><ul><li><span class="pk">instrument_id · unit · from_at</span> (키)</li><li>to_at</li></ul><p>소스 REST로 확인을 끝낸 구간. 겹치거나 맞닿으면 하나로 합침</p></div>
+    <div class="card"><h3>sync_correction</h3><ul><li><span class="pk">id</span> (키)</li><li>instrument_id · unit · start_at · kind</li><li>before · after (jsonb) · detected_at</li></ul><p>정합성 검사·복구에서 고친 내용의 기록</p></div>
+  </div>
+  <p class="read" style="font-size:14px;color:var(--muted)">이벤트 중복 제거용 eventId는 DB가 아니라 메모리에 최근 것만 보관합니다. 지금 방식에서는 보내는 쪽이 짧게만 재시도하고, Kafka로 바꾸면 컨슈머 오프셋이 그 역할을 함께 맡습니다.</p>
+</section>
+
+<!-- 12 -->
+<section id="tasks">
+  <h2><span class="n">14</span>구현 순서</h2>
+  <p class="read">서비스 분리안을 승인하시면 기존 구현 계획(작업 13개)을 아래 순서로 다시 씁니다. 각 단계 안에서는 지금처럼 테스트를 먼저 쓰고 통과시킨 뒤 커밋합니다.</p>
+  <ol class="tasks">
+    <li><h3>libs/</h3><ul><li>market-contract: 종목 ID, 단위·시각 경계, 캔들, 값 기준 비교, 이벤트 타입</li><li>event-bus: 봉투, HTTP 전송(묶음·재시도·순서), 수신함(중복 제거)</li></ul></li>
+    <li><h3>upbit-adapter</h3><ul><li>REST 클라이언트와 우선순위 요청 예산</li><li>웹소켓 수집·정규화·이벤트 발행, 연결 상태 이벤트</li><li><code>/internal/candles</code>·<code>instruments</code>·<code>tickers</code></li></ul></li>
+    <li><h3>marketdata-service</h3><ul><li>저장소, 구간 동기화, 과거 조회 API</li><li>이벤트 수신, 진행 중 캔들 상태 기계, 1초 묶음 발행</li><li>정합성 검사·복구·과거 채우기·종목 갱신, 대조 검사 도구</li></ul></li>
+    <li><h3>edge-gateway</h3><ul><li><code>/api/**</code> 라우팅</li><li>WebSocket 허브와 구독 관리, <code>chart.*</code> 수신·전달, viewing 발행</li></ul></li>
+    <li><h3>frontend</h3><ul><li>지금 계획 그대로 (gateway 하나만 바라봄)</li></ul></li>
+    <li><h3>검증</h3><ul><li>기존 완료 기준: 24시간 수집 후 불일치 0, 5분 끊김 10분 내 복구, 1초 갱신, 과거 스크롤, 업비트 화면과 비교</li><li>추가: 서비스를 하나씩 내렸다 올려도 끝나면 불일치 0</li></ul></li>
+  </ol>
+</section>
+
+<!-- 13 -->
+<section id="risks">
+  <h2><span class="n">15</span>남은 위험과 확인할 것</h2>
+  <div class="risk">
+    <div><b class="hi">높음</b><span>업비트 시세의 상업적 이용 약관은 아직 확인하지 못했습니다. 공개 오픈 전에 반드시 확인해야 합니다.</span></div>
+    <div><b class="hi">높음</b><span>업비트 웹소켓 캔들은 베타 기능입니다. 바뀌면 진행 중 캔들 갱신이 영향을 받지만, 마감 캔들은 REST 정합성 검사가 5분 안에 바로잡습니다. 이 변화는 upbit-adapter 안에서만 흡수합니다.</span></div>
+    <div><b class="hi">높음</b><span>REST로 보내는 이벤트는 받는 서비스가 내려가 있는 동안 사라집니다. 시세는 복구 과정이 메우지만, 잃으면 안 되는 이벤트(2단계 주문 체결)는 Kafka 전환 전에 들이지 않습니다.</span></div>
+    <div><b>중간</b><span>서비스가 셋으로 늘어 로컬 실행과 배포가 복잡해집니다. Docker Compose 한 파일로 함께 띄우고, 서비스 간 계약은 공통 라이브러리로 컴파일 단계에서 맞춥니다.</span></div>
+    <div><b>중간</b><span>업비트 웹 차트에서 거래 없는 분을 어떻게 보여주는지 아직 비교하지 않았습니다. 기본값은 건너뛰고 붙여 그리는 것이고, 검증 단계에서 나란히 놓고 확인합니다.</span></div>
+    <div><b>중간</b><span>정합성 검사 예산(약 3.4회/초)은 계산한 추정치입니다. 시뮬레이션 테스트와 24시간 실측으로 확인합니다.</span></div>
+    <div><b>낮음</b><span>주식 쪽은 확인할 것이 남아 있습니다. 한국투자증권의 실시간 분봉 제공 여부와 41종목 한도, Massive의 분 단위 집계 스트림, 코스콤·Massive의 공개용 계약 가격이 그렇습니다. 1단계 범위 밖이지만 주식 단계 일정에 영향을 줍니다.</span></div>
+  </div>
+</section>
+
+<footer>
+  <span>업비트 관련 숫자는 2026-11-04~05 업비트 공개 API를 직접 호출해 확인한 값입니다.</span>
+</footer>
+
+</div>
+</body>
+</html>
