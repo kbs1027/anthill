@@ -2,9 +2,7 @@
 
 일반 시민을 위한 모의 투자 서비스. 1단계는 **차트**다: 업비트와 모든 단위(1·3·5·10·15·30·60·240분, 일·주·월)에서 같은 캔들을 그리고, 진행 중인 캔들을 1초마다 움직인다.
 
-- 설계: [`docs/superpowers/specs/2026-11-04-phase1-chart-design.md`](docs/superpowers/specs/2026-11-04-phase1-chart-design.md)
 - 구조 보고서: [`docs/architecture/2026-11-05-phase1-architecture.html`](docs/architecture/2026-11-05-phase1-architecture.html)
-- 작업 계획: [`docs/superpowers/plans/2026-11-05-phase1-chart.md`](docs/superpowers/plans/2026-11-05-phase1-chart.md)
 
 ## 구성
 

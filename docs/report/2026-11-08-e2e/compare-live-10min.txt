@@ -1,51 +1,0 @@
-markets: KRW-XRP, KRW-USDT, KRW-BLEND, KRW-EURC, KRW-USDG · 10 min
-5s recorded   10s recorded   15s recorded   20s recorded   25s recorded   30s recorded   35s recorded   40s recorded   45s recorded   50s recorded   55s recorded   60s recorded   65s recorded   70s recorded   75s recorded   80s recorded   85s recorded   90s recorded   95s recorded   100s recorded   105s recorded   110s recorded   115s recorded   120s recorded   125s recorded   130s recorded   135s recorded   140s recorded   145s recorded   150s recorded   155s recorded   160s recorded   165s recorded   170s recorded   175s recorded   180s recorded   185s recorded   190s recorded   195s recorded   200s recorded   205s recorded   210s recorded   215s recorded   220s recorded   225s recorded   230s recorded   235s recorded   240s recorded   245s recorded   250s recorded   255s recorded   260s recorded   265s recorded   270s recorded   275s recorded   280s recorded   285s recorded   290s recorded   295s recorded   300s recorded   305s recorded   310s recorded   315s recorded   320s recorded   325s recorded   330s recorded   335s recorded   340s recorded   345s recorded   350s recorded   355s recorded   360s recorded   365s recorded   370s recorded   375s recorded   380s recorded   385s recorded   390s recorded   395s recorded   400s recorded   405s recorded   410s recorded   415s recorded   420s recorded   425s recorded   430s recorded   435s recorded   440s recorded   445s recorded   450s recorded   455s recorded   460s recorded   465s recorded   470s recorded   475s recorded   480s recorded   485s recorded   490s recorded   495s recorded   500s recorded   505s recorded   510s recorded   515s recorded   520s recorded   525s recorded   530s recorded   535s recorded   540s recorded   545s recorded   550s recorded   555s recorded   560s recorded   565s recorded   570s recorded   575s recorded   580s recorded   585s recorded   590s recorded   595s recorded   
-{
-  "upbitMessages": 293,
-  "ourCandleItems": 333,
-  "latency": {
-    "checked": 291,
-    "p50": 573,
-    "p95": 743,
-    "max": 769,
-    "violations": 0
-  },
-  "closed": {
-    "checked": 23,
-    "violations": 1
-  },
-  "duplicates": {
-    "violations": 0
-  },
-  "pushGapsUnder900ms": 24,
-  "details": {
-    "latencyViolations": [],
-    "closedViolations": [
-      {
-        "key": "KRW-XRP|2026-11-08T06:25:00Z",
-        "ours": {
-          "instrument": "UPBIT:KRW-XRP",
-          "unit": "1m",
-          "time": "2026-11-08T06:25:00Z",
-          "open": "1590",
-          "high": "1591",
-          "low": "1589",
-          "close": "1590",
-          "volume": "72719.10868044",
-          "amount": "115623959.99923236"
-        },
-        "upbitLast": {
-          "open": "1590.00000000",
-          "high": "1591.00000000",
-          "low": "1589.00000000",
-          "close": "1589.00000000",
-          "volume": "72778.18467544",
-          "amount": "115717831.75528736"
-        }
-      }
-    ],
-    "overVolume": []
-  }
-}
-FAIL: 1 violations
-exit=1

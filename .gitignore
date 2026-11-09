@@ -1,4 +1,6 @@
 .superpowers/
+docs/superpowers/
+docs/report/
 .DS_Store
 .idea/
 *.iml
