@@ -1,0 +1,13 @@
+# 화면. 브라우저에서 http://localhost:3000 을 연다. 백엔드까지 함께 띄우려면 저장소 최상위의 docker-compose.yml을 쓴다.
+# 실행: docker compose up -d --build      멈춤: docker compose stop
+#
+# name을 백엔드와 같은 anthill로 둔다. 따로 띄워도 같은 네트워크에서 edge-gateway를 찾기 위해서다.
+name: anthill
+
+services:
+  frontend:
+    build: .
+    image: anthill/frontend:dev
+    ports:
+      - "3000:80"
+    restart: unless-stopped

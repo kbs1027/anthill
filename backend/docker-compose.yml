@@ -1,7 +1,7 @@
-# 전체 실행: DB + 세 서비스.
-# 이미지 만들기: ./gradlew :services:upbit-adapter:bootBuildImage :services:marketdata-service:bootBuildImage :services:edge-gateway:bootBuildImage
-# 실행: docker compose -f docker-compose.full.yml up -d      멈춤: docker compose -f docker-compose.full.yml down
+# 백엔드: DB + 세 서비스. 화면까지 함께 띄우려면 저장소 최상위의 docker-compose.yml을 쓴다.
+# 전체 실행: docker compose up -d --build      DB만: docker compose up -d db      멈춤: docker compose down
 #
+# name을 anthill로 고정한다. 폴더 이름(backend)으로 정해지면 기존 anthill_pgdata 볼륨을 찾지 못한다.
 # 서비스끼리는 서비스 이름으로 찾는다. 맵·목록 설정(소스 주소, 이벤트 구독자)은 SPRING_APPLICATION_JSON으로 덮어쓴다:
 # 환경 변수 ANTHILL_SOURCES_UPBIT는 맵 키가 소문자(upbit)로 묶이고, ANTHILL_EVENTS_SUBSCRIBERS_0_URL은 목록 전체를 바꿔 types가 빠지기 때문이다.
 name: anthill
@@ -25,6 +25,10 @@ services:
     restart: unless-stopped
 
   upbit-adapter:
+    build:
+      context: .
+      args:
+        SERVICE: upbit-adapter
     image: anthill/upbit-adapter:dev
     environment:
       SPRING_PROFILES_ACTIVE: dev   # /admin/stream/pause (끊김 복구 시험용)
@@ -35,6 +39,10 @@ services:
     restart: unless-stopped
 
   marketdata-service:
+    build:
+      context: .
+      args:
+        SERVICE: marketdata-service
     image: anthill/marketdata-service:dev
     depends_on:
       db:
@@ -49,6 +57,10 @@ services:
     restart: unless-stopped
 
   edge-gateway:
+    build:
+      context: .
+      args:
+        SERVICE: edge-gateway
     image: anthill/edge-gateway:dev
     environment:
       ANTHILL_MARKETDATA_URL: http://marketdata-service:8081

@@ -1,14 +1,8 @@
-services:
-  db:
-    image: postgres:18
-    environment:
-      POSTGRES_DB: anthill
-      POSTGRES_USER: anthill
-      POSTGRES_PASSWORD: anthill
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql
+# 저장소 전체를 한 번에 실행한다: DB + 백엔드 서비스 + 화면.
+# 실행: docker compose up -d --build      DB만: docker compose up -d db      멈춤: docker compose down
+# 각 파일의 경로는 그 파일이 있는 폴더를 기준으로 해석된다.
+name: anthill
 
-volumes:
-  pgdata:
+include:
+  - backend/docker-compose.yml
+  - frontend/docker-compose.yml

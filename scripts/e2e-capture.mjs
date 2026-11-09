@@ -4,7 +4,7 @@
 // 사용: node scripts/e2e-capture.mjs [--url http://localhost:5173] [--out build/e2e] [--reconnect] [--at 'YYYY-MM-DD HH:mm']
 //   --at: 십자선 단계에서 이 분(KST)의 캔들을 찾아 가리킨다(업비트 화면 캡처와 같은 캔들을 나란히 보려고).
 //   --reconnect: edge-gateway 컨테이너를 30초 내렸다 올려, 열린 화면이 다시 붙어 갱신을 받는지도 캡처한다.
-// 필요: Google Chrome, Node 26(내장 WebSocket·fetch), docker-compose.full.yml 스택.
+// 필요: Google Chrome, Node 26(내장 WebSocket·fetch), 최상위 docker-compose.yml 스택. 저장소 최상위에서 실행한다.
 
 import { execSync, spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -171,11 +171,11 @@ try {
     await evaluate(`document.querySelector('.market-row').click()`) // 거래대금 1위로 돌아간다
     await sleep(3000)
     const r0 = await legend()
-    execSync('docker compose -f docker-compose.full.yml stop edge-gateway', { stdio: 'ignore' })
+    execSync('docker compose stop edge-gateway', { stdio: 'ignore' })
     const stoppedAt = new Date().toISOString()
     await sleep(20000)
     const r1 = await legend(); await shot('10-reconnect-during', '.chart-panel')
-    execSync('docker compose -f docker-compose.full.yml start edge-gateway', { stdio: 'ignore' })
+    execSync('docker compose start edge-gateway', { stdio: 'ignore' })
     const startedAt = new Date().toISOString()
     let r2 = r1
     const until = Date.now() + 90_000
