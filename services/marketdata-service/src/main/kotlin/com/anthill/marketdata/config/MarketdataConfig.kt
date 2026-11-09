@@ -16,6 +16,9 @@ import com.anthill.marketdata.ingest.StreamStatusHandler
 import com.anthill.marketdata.ingest.TickerHandler
 import com.anthill.marketdata.ingest.TradeHandler
 import com.anthill.marketdata.ingest.ViewingHandler
+import com.anthill.marketdata.leader.LeaderGatedSink
+import com.anthill.marketdata.leader.LeaderLease
+import com.anthill.marketdata.leader.Leadership
 import com.anthill.marketdata.live.ClosedCandlePersister
 import com.anthill.marketdata.live.LiveCandleBook
 import com.anthill.marketdata.live.LiveIngest
@@ -33,6 +36,8 @@ import com.anthill.marketdata.sync.Recovery
 import com.anthill.marketdata.sync.Startup
 import io.micrometer.core.instrument.MeterRegistry
 import org.springframework.beans.factory.ObjectProvider
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.jdbc.core.simple.JdbcClient
 import com.anthill.marketdata.candle.CandleChangeSink
 import org.springframework.boot.ApplicationRunner
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -46,10 +51,11 @@ import tools.jackson.databind.JacksonModule
 import java.net.URI
 import java.time.Clock
 import java.time.Duration
+import java.util.UUID
 import java.util.concurrent.Executors
 
 @ConfigurationProperties("anthill")
-data class SourcesProperties(val sources: Map<String, URI> = emptyMap())
+data class SourcesProperties(val sources: Map<String, List<URI>> = emptyMap())
 
 @ConfigurationProperties("anthill.events")
 data class EventsProperties(val enabled: Boolean = true, val subscribers: List<SubscriberProperties> = emptyList()) {
@@ -91,8 +97,18 @@ class MarketdataConfig {
             CandleChangeSink { i, u, up, del -> publisher.getObject().onCorrected(i, u, up, del) },
         )
 
+    /** 작업이 꺼진 프로필(검증 도구·테스트)은 임차권 없이 언제나 주 서버다. */
     @Bean
-    fun liveCandleBook(clock: Clock, props: LiveProperties, persister: ClosedCandlePersister) = LiveCandleBook(clock, props.closeGrace, persister)
+    fun leadership(
+        jdbc: JdbcClient, @Value("\${anthill.jobs.enabled:false}") jobs: Boolean, @Value("\${anthill.instance-id:}") instanceId: String,
+        @Value("\${anthill.leader.ttl:1s}") ttl: Duration,
+    ): Leadership = if (jobs) Leadership(LeaderLease(jdbc), instanceId.ifBlank { UUID.randomUUID().toString() }, ttl) else Leadership.always()
+
+    @Bean
+    fun leaderGatedSink(persister: ClosedCandlePersister, leadership: Leadership, clock: Clock) = LeaderGatedSink(persister, leadership::isLeader, clock)
+
+    @Bean
+    fun liveCandleBook(clock: Clock, props: LiveProperties, sink: LeaderGatedSink) = LiveCandleBook(clock, props.closeGrace, sink)
 
     @Bean
     fun tickerCache() = TickerCache()
@@ -107,8 +123,9 @@ class MarketdataConfig {
     fun liveIngest(book: LiveCandleBook, tracker: StreamStatusTracker) = LiveIngest(book, tracker)
 
     @Bean
-    fun livePublisher(book: LiveCandleBook, tickers: TickerCache, publisher: EventPublisher, clock: Clock) =
-        LivePublisher(book, tickers, publisher, clock)
+    fun livePublisher(
+        book: LiveCandleBook, tickers: TickerCache, publisher: EventPublisher, clock: Clock, leadership: Leadership, tracker: StreamStatusTracker, sources: SourcesProperties,
+    ) = LivePublisher(book, tickers, publisher, clock, leadership::isLeader, { sources.sources.keys.all { tracker.connectedSince(it) != null } })
 
     @Bean
     fun eventInbox(
@@ -126,7 +143,8 @@ class MarketdataConfig {
     fun startup(
         props: SourcesProperties, source: SourceClient, instruments: InstrumentRepository, tickers: TickerCache, book: LiveCandleBook,
         tracker: StreamStatusTracker, sync: CandleSync, candles: CandleRepository, clock: Clock, outages: OutageLog, coverage: CoverageRepository,
-    ) = Startup(props.sources.keys.toList(), source, instruments, tickers, book, tracker, sync, candles, clock, outages, coverage)
+        leadership: Leadership,
+    ) = Startup(props.sources.keys.toList(), source, instruments, tickers, book, tracker, sync, candles, clock, outages, coverage, isLeader = leadership::isLeader)
 
     @Bean
     fun reconciler(
@@ -148,13 +166,24 @@ class MarketdataConfig {
     /** 시작: 스트림 연결 → 복구, 끊김 → 장애 구간 열기를 걸고, 소스 준비 뒤 복구한다. */
     @Bean
     @ConditionalOnProperty("anthill.jobs.enabled", havingValue = "true")
-    fun startupRunner(startup: Startup, tracker: StreamStatusTracker, recovery: Recovery, outages: OutageLog, props: SourcesProperties) = ApplicationRunner {
-        tracker.onDisconnected { source, at -> outages.open(source, at) }
-        tracker.onConnected { source, _ -> Thread.ofVirtual().name("recovery-$source").start { recovery.recoverAll(source) } }
+    fun startupRunner(
+        startup: Startup, tracker: StreamStatusTracker, recovery: Recovery, outages: OutageLog, props: SourcesProperties,
+        leadership: Leadership, sink: LeaderGatedSink, live: LivePublisher,
+    ) = ApplicationRunner {
+        tracker.onDisconnected { source, at -> if (leadership.isLeader()) outages.open(source, at) }
+        tracker.onConnected { source, _ -> if (leadership.isLeader()) Thread.ofVirtual().name("recovery-$source").start { recovery.recoverAll(source) } }
+        leadership.tick()
+        // 예비가 이어받으면: 들고 있던 마감을 저장·전송하고 바로 한 번 발행한 뒤, 그 사이 빈 구간이 있는지 복구로 확인한다.
+        leadership.onPromoted {
+            sink.flush()
+            live.onPromoted()
+            live.tick()
+            Thread.ofVirtual().name("promoted").start { props.sources.keys.forEach { recovery.recoverAll(it) } }
+        }
         // 시작 복구는 연결 알림에 기대지 않고 직접 부른다(리스너를 걸기 전에 알림이 먼저 올 수 있다).
         Thread.ofVirtual().name("startup").start {
             startup.run()
-            props.sources.keys.forEach { recovery.recoverAll(it) }
+            if (leadership.isLeader()) props.sources.keys.forEach { recovery.recoverAll(it) }
         }
     }
 }
@@ -169,14 +198,19 @@ class LiveTickSchedule(
     private val reconciler: Reconciler,
     private val tracker: StreamStatusTracker,
     private val clock: Clock,
+    private val leadership: Leadership,
 ) {
     @Scheduled(fixedRate = 1000)
     fun tick() = publisher.tick()
 
-    /** 어댑터는 5초마다 상태를 알린다. 20초 동안 아무 소식이 없으면 끊긴 것으로 보고 장애 구간을 연다(리뷰 I5). */
-    @Scheduled(fixedRate = 5000)
-    fun watchdog() = tracker.expire(clock.instant(), Duration.ofSeconds(20))
+    /** 임차권 유효 시간(1초)의 4분의 1마다 갱신한다. 주 서버가 죽으면 예비가 1초 남짓 안에 이어받는다. */
+    @Scheduled(fixedRate = 250)
+    fun lease() = leadership.tick()
+
+    /** 어댑터는 1초마다 상태를 알린다. 3초 동안 아무 소식이 없으면 그 어댑터는 끊긴 것으로 본다(마지막 한 대면 장애 구간을 연다). */
+    @Scheduled(fixedRate = 1000)
+    fun watchdog() = tracker.expire(clock.instant(), Duration.ofSeconds(3))
 
     @Scheduled(initialDelay = 5000, fixedDelay = 5000)
-    fun reconcile() = reconciler.runDue()
+    fun reconcile() { if (leadership.isLeader()) reconciler.runDue() }
 }
