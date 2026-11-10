@@ -66,4 +66,32 @@ class VerifyCandlesRunnerTest : PgTest() {
         assertEquals(listOf("UPBIT:KRW-BTC 1m"), report.uncovered)
         assertEquals(listOf("UPBIT:KRW-BTC 5m"), report.overdue.map { it.substringBefore(" since") })
     }
+
+    @Test
+    fun `samples are picked per source`() {
+        fun tickers(source: String, scale: Long) = (1..20).map { n ->
+            val id = com.anthill.contract.InstrumentId.parse("$source:S$n")
+            val day = FakeSource.candle(now, instrument = id, unit = CandleUnit.DAY)
+            com.anthill.contract.TickerSnapshot(id, BigDecimal.ONE, BigDecimal.ZERO, BigDecimal.valueOf(n * scale), day)
+        }
+        // 원화 금액이 숫자상 훨씬 크다. 한 줄로 세우면 바이낸스 상위 종목이 뽑히지 않는다.
+        val ids = VerifyCandlesRunner.samples(mapOf("UPBIT" to tickers("UPBIT", 1_000_000_000), "BINANCE" to tickers("BINANCE", 1)), kotlin.random.Random(1))
+        for (source in listOf("UPBIT", "BINANCE")) {
+            val mine = ids.filter { it.source == source }.map { it.symbol }.toSet()
+            assertTrue(mine.containsAll((16..20).map { "S$it" }), "$source top: $mine")
+            assertTrue(mine.containsAll((1..5).map { "S$it" }), "$source bottom: $mine")
+            assertTrue(mine.size in 10..15, "$source size: $mine")
+        }
+    }
+
+    @Test
+    fun `only the instrument's own source outage excuses the deadline`() {
+        coverage.add(BTC, CandleUnit.M5, Instant.EPOCH, from)            // 첫 미검증 마감 10:05
+        outages.open("BINANCE", from)
+        outages.close("BINANCE", from.plusSeconds(3600))
+        assertEquals(1, verifier().verify(listOf(BTC to CandleUnit.M5), now).overdue.size)
+        outages.open("UPBIT", from)
+        outages.close("UPBIT", from.plusSeconds(3600))
+        assertEquals(0, verifier().verify(listOf(BTC to CandleUnit.M5), now).overdue.size)
+    }
 }

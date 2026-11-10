@@ -5,6 +5,7 @@ import com.anthill.contract.CandleUnit
 import com.anthill.contract.InstrumentId
 import com.anthill.contract.InstrumentInfo
 import com.anthill.contract.Priority
+import com.anthill.contract.SecondCandle
 import com.anthill.contract.StreamStatus
 import com.anthill.contract.TickerSnapshot
 import tools.jackson.core.type.TypeReference
@@ -24,6 +25,8 @@ interface SourceClient {
     fun instruments(source: String): List<InstrumentInfo>
     fun tickers(source: String): List<TickerSnapshot>
     fun streamStatus(source: String): StreamStatus
+    /** 1초 캔들(1초 캔들을 주는 소스만). 과거→최신 순, [from] 포함·[to] 배타, 최대 1000초. */
+    fun seconds(instrument: InstrumentId, from: Instant, to: Instant, priority: Priority): List<SecondCandle>
 }
 
 class SourceUnavailableException(message: String) : RuntimeException(message)
@@ -51,6 +54,11 @@ class HttpSourceClient(
 
     override fun streamStatus(source: String): StreamStatus =
         get(source, "/internal/stream-status", object : TypeReference<StreamStatus>() {})
+
+    override fun seconds(instrument: InstrumentId, from: Instant, to: Instant, priority: Priority): List<SecondCandle> {
+        val query = "instrument=${enc(instrument.value)}&from=${enc(from.toString())}&to=${enc(to.toString())}&priority=${priority.name}"
+        return get(instrument.source, "/internal/seconds?$query", object : TypeReference<List<SecondCandle>>() {})
+    }
 
     private fun <T> get(source: String, path: String, type: TypeReference<T>): T {
         val base = baseUrls[source] ?: throw SourceUnavailableException("no adapter configured for $source")

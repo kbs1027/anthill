@@ -1,0 +1,60 @@
+{
+  "mode": "before",
+  "startedAt": "2026-11-10T14:55:53.336Z",
+  "steps": [
+    {
+      "n": "01",
+      "name": "first-screen",
+      "status": "pass",
+      "shot": "01-first-screen.png"
+    },
+    {
+      "n": "02",
+      "name": "live-every-second",
+      "status": "skip"
+    },
+    {
+      "n": "03",
+      "name": "ten-minute",
+      "status": "skip"
+    },
+    {
+      "n": "04",
+      "name": "day-week-month",
+      "status": "skip"
+    },
+    {
+      "n": "05",
+      "name": "quiet-symbol",
+      "status": "skip"
+    },
+    {
+      "n": "06",
+      "name": "search-symbol",
+      "status": "skip"
+    },
+    {
+      "n": "07",
+      "name": "crosshair-vs-binance",
+      "status": "skip"
+    },
+    {
+      "n": "08",
+      "name": "scroll-back",
+      "status": "skip"
+    },
+    {
+      "n": "09",
+      "name": "upbit-still-works",
+      "status": "pass",
+      "shot": "09-upbit-still-works.png"
+    },
+    {
+      "n": "10",
+      "name": "after-reconnect",
+      "status": "skip"
+    }
+  ],
+  "pageErrors": [],
+  "finishedAt": "2026-11-10T14:56:05.590Z"
+}

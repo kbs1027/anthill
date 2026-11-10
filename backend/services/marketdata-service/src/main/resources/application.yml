@@ -9,8 +9,13 @@ spring:
 anthill:
   sources:
     UPBIT: http://localhost:8082
+    BINANCE: http://localhost:8083
   jobs.enabled: true
   backfill.minute-days: 7
+  # 소스별 정합성 검사 동시 처리 수. 바이낸스는 검사할 것이 많아 4개씩(무게 예산은 어댑터가 지킨다).
+  reconcile.parallelism:
+    UPBIT: 1
+    BINANCE: 4
   live.close-grace: 10s
   events.subscribers:
     - types: [ "chart." ]

@@ -21,6 +21,7 @@ include(
     "libs:market-contract",
     "libs:event-bus",
     "services:upbit-adapter",
+    "services:binance-adapter",
     "services:marketdata-service",
     "services:edge-gateway",
 )

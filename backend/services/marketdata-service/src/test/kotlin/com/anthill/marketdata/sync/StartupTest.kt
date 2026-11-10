@@ -63,4 +63,27 @@ class StartupTest : PgTest() {
         source.failures = 0
         t.join(5_000)
     }
+
+    @Test
+    fun `a source that is not up does not hold back the other`() {
+        val bn = com.anthill.marketdata.FakeSource.BN
+        source.instruments = listOf(InstrumentInfo(BTC, "비트코인", "Bitcoin"), InstrumentInfo(bn, "BTC", "BTC"))
+        source.status = StreamStatus(true, Instant.parse("2026-11-08T09:00:00Z"))
+        source.downSources = setOf("BINANCE")
+        val clock = Clock.fixed(Instant.parse("2026-11-08T10:00:00Z"), ZoneOffset.UTC)
+        val startup = Startup(
+            listOf("BINANCE", "UPBIT"), source, instruments, TickerCache(), LiveCandleBook(clock, Duration.ofSeconds(10)) { _, _ -> }, StreamStatusTracker(),
+            sync, candles, clock, outages, coverage, retry = Duration.ofMillis(10),
+        )
+        val ready = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val t = Thread.ofVirtual().start { startup.run { ready += it } }
+        val until = System.nanoTime() + 5_000_000_000L
+        while ("UPBIT" !in ready && System.nanoTime() < until) Thread.sleep(10)
+        assertEquals(listOf("UPBIT"), ready.toList())
+        assertEquals(listOf(BTC), instruments.active().map { it.id })
+        source.downSources = emptySet()
+        t.join(5_000)
+        assertEquals(setOf("UPBIT", "BINANCE"), ready.toSet())
+        assertEquals(setOf(BTC, bn), instruments.active().map { it.id }.toSet())
+    }
 }

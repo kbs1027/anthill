@@ -24,6 +24,7 @@ anthill/
 | `edge-gateway` | 8080 | 브라우저의 유일한 입구. `/api/**` → marketdata, WebSocket `/ws` 허브 |
 | `marketdata-service` | 8081 | 캔들 저장·정합성 검사·복구·과거 채우기, 진행 중 캔들 1초 발행 |
 | `upbit-adapter` | 8082 | 업비트 웹소켓 수신, 업비트 REST(초당 9회 예산) |
+| `binance-adapter` | 8083 | 바이낸스 USDT 현물 웹소켓(1초 캔들) 수신, 바이낸스 REST(분당 무게 4800 예산) |
 | PostgreSQL 18 | 5432 | 마감 캔들, 확인 구간(coverage), 정정 기록, 장애 구간 |
 | `frontend` | 5173(Vite) · 3000(컨테이너) | 차트·종목 목록 화면 (`/api`, `/ws`를 게이트웨이로 프록시) |
 
@@ -46,6 +47,10 @@ cd backend && ./gradlew :services:upbit-adapter:bootRun
 ```
 
 ```bash
+cd backend && ./gradlew :services:binance-adapter:bootRun
+```
+
+```bash
 cd backend && ./gradlew :services:marketdata-service:bootRun
 ```
 
@@ -60,6 +65,8 @@ cd frontend && npm install && npm run dev
 브라우저에서 http://localhost:5173 을 연다. 처음 시작하면 marketdata가 종목 목록과 이번 달 일봉을 받고(약 30초, 그동안 종목 목록 시세는 `-`), 남는 요청 예산으로 일·주·월봉 전체와 분봉 최근 7일을 채운다. 다 채우면 marketdata 로그에 `initial backfill complete`가 찍힌다.
 
 > 업비트 REST 한도는 IP당 초당 10회다. 어댑터가 9회를 쓰므로, 같은 IP에서 업비트 API를 따로 부르면 429가 날 수 있다.
+
+> 바이낸스는 미국 IP를 막는다(HTTP 451). 그런 곳에서는 바이낸스 어댑터가 5초마다 다시 시도만 하고, 업비트 쪽은 그대로 돈다. 바이낸스 REST 한도는 IP당 분당 무게 6000이고 어댑터가 4800(80%)까지 쓰므로, 같은 IP에서 바이낸스 API를 따로 부를 때는 나머지 몫 안에서 쓴다. 바이낸스 종목(약 500개)은 첫 과거 채우기가 약 1~1.5시간 걸린다. 그동안에도 차트를 열면 필요한 캔들은 바로 받아 온다.
 
 ## 전체를 컨테이너로 실행하기
 
@@ -85,7 +92,7 @@ cd frontend && npx vitest run && npx tsc -b
 
 백엔드 통합 테스트는 Testcontainers로 PostgreSQL 18을 띄우므로 Docker가 켜져 있어야 한다.
 
-## 업비트와 맞는지 확인하는 도구
+## 거래소와 맞는지 확인하는 도구
 
 **마감 캔들 대조** — DB의 마감 캔들을 업비트 REST와 직접 비교한다. 거래대금 상위 5·하위 5·무작위 5 종목 × 11개 단위, 검사 시한이 지난 캔들만 본다. 불일치가 있으면 종료 코드 1.
 
@@ -99,7 +106,13 @@ cd backend && ./gradlew :services:marketdata-service:bootRun --args='--spring.pr
 node scripts/compare-live.mjs --minutes 10
 ```
 
-**운영 지표** (marketdata `/actuator/metrics`): `anthill.reconcile.late`(검사 시한을 넘겨 확인한 구간 수, 장애 구간 제외, 시작 이후 누적), `anthill.reconcile.overdue`(지금 시한을 넘긴 수, 순간값), `anthill.reconcile.lag.seconds`, `anthill.events.dropped`.
+`--source binance`를 주면 기준이 바이낸스 웹소켓 `kline_1m`으로 바뀌고, 종목도 바이낸스 종목 안에서 고른다(직접 줄 때는 `--markets BTCUSDT,ETHUSDT`). 판정은 같다.
+
+```bash
+node scripts/compare-live.mjs --source binance --minutes 10
+```
+
+**운영 지표** (marketdata `/actuator/metrics`): `anthill.reconcile.late`(검사 시한을 넘겨 확인한 구간 수, 장애 구간 제외, 시작 이후 누적), `anthill.reconcile.overdue`(지금 시한을 넘긴 수, 순간값), `anthill.reconcile.lag.seconds`, `anthill.events.dropped`. 검사 지표 세 개(`late`, `overdue`, `lag.seconds`)에는 `source` 태그(`UPBIT`, `BINANCE`)가 붙어 거래소별로 볼 수 있다(예: `/actuator/metrics/anthill.reconcile.overdue?tag=source:BINANCE`).
 
 대조 도구는 값 불일치(`MISMATCH`)와 함께 한 번도 확인하지 않은 (종목, 단위)(`UNCOVERED`), 확인이 시한을 넘긴 것(`OVERDUE`)도 보고하고, 하나라도 있으면 종료 코드 1이다.
 

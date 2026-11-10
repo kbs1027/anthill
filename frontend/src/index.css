@@ -70,7 +70,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .legend.up .close { color: var(--up); }
 .legend.down .close { color: var(--down); }
 
-.markets { display: grid; grid-template-rows: auto auto 1fr; height: 100%; min-height: 0; }
+.markets { display: grid; grid-template-rows: auto auto auto 1fr; height: 100%; min-height: 0; }
+/* 거래소 탭: 단위 버튼(.units)과 같은 모양 */
+.source-tabs { display: flex; gap: 4px; padding: 12px 12px 0; }
+.source-tabs button { border: 1px solid var(--line); background: var(--surface); padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+.source-tabs button:hover { background: var(--hover); }
+.source-tabs button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fff; }
 .search { display: block; padding: 12px; border-bottom: 1px solid var(--line); }
 .search input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
 .market-head, .market-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr 0.8fr 0.9fr; gap: 6px; align-items: center; }

@@ -18,7 +18,7 @@ import java.util.logging.Logger
 /**
  * 시작할 때 소스마다: 종목 목록 → 이번 달(또는 더 이른 이번 주)의 마감 일봉 확보 → 티커 → 스트림 상태.
  * 꺼져 있던 동안을 장애 구간으로 먼저 열어 둔다. 준비가 끝나면 시작 쪽이 복구를 불러 그 구간을 채우고 닫는다.
- * 소스(어댑터)가 아직 안 떴으면 [retry]마다 다시 시도한다.
+ * 소스(어댑터)가 아직 안 떴으면 [retry]마다 다시 시도한다. 소스마다 따로 준비하므로 한 소스가 안 떠도 다른 소스는 진행한다.
  */
 class Startup(
     private val sources: List<String>,
@@ -36,13 +36,29 @@ class Startup(
 ) {
     private val log = Logger.getLogger(Startup::class.java.name)
 
-    fun run() {
-        // 어댑터를 기다리기 전에 장애 구간부터 연다. 기다리는 사이 어댑터 알림으로 복구가 먼저 돌아도 그 복구가 닫는다.
-        if (outages != null && coverage != null) {
-            val ends = coverage.ends()
-            sources.forEach { name -> outages.open(name, ends.filterKeys { it.first.source == name }.values.maxOrNull() ?: clock.instant()) }
+    /**
+     * 장애 구간을 먼저 열고, 소스마다 따로(스레드 하나씩) 준비한 뒤 [onReady]를 부른다. 모든 소스가 끝날 때까지 기다린다.
+     */
+    fun run(onReady: (String) -> Unit = {}) {
+        openOutages()
+        val threads = sources.map { name ->
+            Thread.ofVirtual().name("startup-$name").start {
+                prepareWithRetry(name)
+                try {
+                    onReady(name)
+                } catch (e: Exception) {
+                    log.log(Level.WARNING, "준비 뒤 단계(복구) 실패: $name", e)
+                }
+            }
         }
-        sources.forEach { prepareWithRetry(it) }
+        threads.forEach { it.join() }
+    }
+
+    /** 어댑터를 기다리기 전에 장애 구간부터 연다. 기다리는 사이 어댑터 알림으로 복구가 먼저 돌아도 그 복구가 닫는다. */
+    fun openOutages() {
+        if (outages == null || coverage == null) return
+        val ends = coverage.ends()
+        sources.forEach { name -> outages.open(name, ends.filterKeys { it.first.source == name }.values.maxOrNull() ?: clock.instant()) }
     }
 
     private fun prepareWithRetry(name: String) {

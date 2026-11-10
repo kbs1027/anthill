@@ -19,6 +19,9 @@ class CoverageRepository(private val jdbc: JdbcClient) {
     @Transactional
     fun add(i: InstrumentId, u: CandleUnit, from: Instant, to: Instant) {
         require(from < to) { "empty coverage [$from, $to)" }
+        // 같은 (종목, 단위)는 한 번에 하나씩 고친다. 아래 for update는 이미 있는 행만 잠그므로,
+        // 행이 아직 없을 때 두 요청이 동시에 들어오면 둘 다 insert해서 기본 키가 부딪친다.
+        jdbc.sql("select pg_advisory_xact_lock(hashtext(:key))").param("key", "coverage:${i.value}:${u.code}").query().singleValue()
         val touching = jdbc.sql(
             "select from_at, to_at from coverage where instrument_id = :i and unit = :u and from_at <= :to and to_at >= :from for update",
         ).param("i", i.value).param("u", u.code).param("from", utc(from)).param("to", utc(to))

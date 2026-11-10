@@ -10,7 +10,7 @@ import java.math.BigDecimal
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -27,24 +27,26 @@ class InitialBackfill(
     private val minuteDays: Int,
 ) {
     private val log = Logger.getLogger(InitialBackfill::class.java.name)
-    private val running = AtomicBoolean(false)
+    private val running = ConcurrentHashMap.newKeySet<String>()
 
-    fun startAsync() {
-        if (!running.compareAndSet(false, true)) return
-        Thread.ofVirtual().name("initial-backfill").start {
+    /** 소스마다 따로 돈다. 같은 소스가 이미 돌고 있으면 바로 돌아온다. */
+    fun startAsync(source: String) {
+        if (!running.add(source)) return
+        Thread.ofVirtual().name("initial-backfill-$source").start {
             try {
-                runOnce()
+                runOnce(source)
             } catch (e: Exception) {
-                log.log(Level.WARNING, "initial backfill stopped", e)
+                log.log(Level.WARNING, "initial backfill stopped: $source", e)
             } finally {
-                running.set(false)
+                running.remove(source)
             }
         }
     }
 
-    fun runOnce() {
+    /** [source] 종목만, 그 소스의 24시간 거래대금 큰 순으로(원화와 USDT를 섞어 비교하지 않는다). */
+    fun runOnce(source: String) {
         val now = clock.instant()
-        val list = instruments.active().sortedByDescending { tickers.amount24h(it.id) ?: BigDecimal.ZERO }
+        val list = instruments.active().filter { it.id.source == source }.sortedByDescending { tickers.amount24h(it.id) ?: BigDecimal.ZERO }
         for (info in list) {
             for (u in listOf(CandleUnit.DAY, CandleUnit.WEEK, CandleUnit.MONTH)) {
                 var cursor = coverage.start(info.id, u) ?: u.floor(now)
@@ -59,6 +61,6 @@ class InitialBackfill(
                 if (from < to) sync.syncWindow(info.id, u, from, to, Priority.BACKFILL, audit = false)
             }
         }
-        log.info("initial backfill complete")
+        log.info("initial backfill complete: $source")
     }
 }

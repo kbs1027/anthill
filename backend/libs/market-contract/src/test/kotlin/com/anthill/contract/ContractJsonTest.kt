@@ -46,6 +46,24 @@ class ContractJsonTest {
     }
 
     @Test
+    fun `second candle event round trips with decimals as strings`() {
+        val event = SecondCandleEvent(
+            SecondCandle(
+                InstrumentId.parse("BINANCE:BTCUSDT"), Instant.parse("2026-11-10T12:00:01Z"),
+                BigDecimal("74430.01000000"), BigDecimal("74430.02"), BigDecimal("74430.00"), BigDecimal("74430.02"),
+                BigDecimal("0.00683000"), BigDecimal("508.35703230"),
+            ),
+        )
+        val json = mapper.writeValueAsString(event)
+        assertTrue(json.contains("\"start\":\"2026-11-10T12:00:01Z\""), json)
+        assertTrue(json.contains("\"open\":\"74430.01\""), json)
+        assertFalse(Regex("\"(open|high|low|close|volume|amount)\":[0-9]").containsMatchIn(json), json)
+        val back = mapper.readValue(json, SecondCandleEvent::class.java)
+        assertEquals(0, back.candle.amount.compareTo(event.candle.amount))
+        assertEquals(event.candle.instrument, back.candle.instrument)
+    }
+
+    @Test
     fun `decimal numbers are read exactly`() {
         val json = """{"instrument":"UPBIT:KRW-BTC","price":108310000.10,"volume":"0.0001","tradedAt":"2026-11-05T11:23:01Z","sequentialId":1}"""
         assertEquals(BigDecimal("108310000.10"), mapper.readValue(json, TradeEvent::class.java).price)

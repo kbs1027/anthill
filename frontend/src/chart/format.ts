@@ -35,7 +35,18 @@ export function formatChangeRate(rate: string | null): string {
   return `${pct > 0 ? '+' : ''}${pct.toFixed(2)}%`
 }
 
-export function formatAmount24h(amount: string | null): string {
+/** 종목의 가격 통화: `UPBIT:KRW-BTC` → `KRW`, `BINANCE:BTCUSDT` → `USDT`. */
+export function quoteOf(market: string): string {
+  const symbol = market.slice(market.indexOf(':') + 1)
+  const dash = symbol.indexOf('-')
+  if (dash >= 0) return symbol.slice(0, dash)
+  return symbol.endsWith('USDT') ? 'USDT' : ''
+}
+
+/** 24시간 거래대금을 "백만" 단위로. 원화는 정수 반올림, USDT는 금액이 작아 소수 둘째 자리까지 보인다. */
+export function formatAmount24h(amount: string | null, market: string): string {
   if (amount === null) return '-'
-  return `${groupDigits(String(Math.round(Number(amount) / 1e6)))}백만`
+  const millions = Number(amount) / 1e6
+  const shown = quoteOf(market) === 'USDT' ? millions.toFixed(2) : String(Math.round(millions))
+  return `${groupDigits(shown)}백만`
 }

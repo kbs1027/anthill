@@ -5,6 +5,7 @@ import com.anthill.contract.CandleUnit
 import com.anthill.contract.InstrumentId
 import com.anthill.contract.InstrumentInfo
 import com.anthill.contract.Priority
+import com.anthill.contract.SecondCandle
 import com.anthill.contract.StreamStatus
 import com.anthill.contract.TickerSnapshot
 import com.anthill.marketdata.source.SourceClient
@@ -21,10 +22,25 @@ class FakeSource : SourceClient {
     @Volatile var tickers: List<TickerSnapshot> = emptyList()
     @Volatile var status = StreamStatus(false, null)
     @Volatile var failures = 0
+    /** 이 소스들은 종목·티커·상태 조회가 늘 실패한다(어댑터가 안 뜬 소스). */
+    @Volatile var downSources: Set<String> = emptySet()
     /** 다음 n번의 캔들 조회를 실패시킨다(어댑터 REST가 아직 안 열렸을 때처럼). */
     val candleFailures = java.util.concurrent.atomic.AtomicInteger()
     /** 설정하면 candles()가 이 래치가 풀릴 때까지 기다린다(동시 실행 시험용). */
     @Volatile var gate: java.util.concurrent.CountDownLatch? = null
+    private val secondData = ConcurrentHashMap<InstrumentId, MutableList<SecondCandle>>()
+    /** seconds() 호출 기록: (종목, from, to). */
+    val secondCalls: MutableList<Triple<InstrumentId, Instant, Instant>> = java.util.Collections.synchronizedList(mutableListOf())
+    /** 다음 n번의 1초 캔들 조회를 실패시킨다. */
+    val secondFailures = AtomicInteger()
+
+    fun putSeconds(seconds: Collection<SecondCandle>) = seconds.forEach { s ->
+        val list = secondData.getOrPut(s.instrument) { mutableListOf() }
+        synchronized(list) {
+            list.removeIf { it.start == s.start }
+            list += s
+        }
+    }
 
     fun put(candles: Collection<Candle>) = candles.forEach { c ->
         val list = data.getOrPut(c.instrument to c.unit) { mutableListOf() }
@@ -38,7 +54,10 @@ class FakeSource : SourceClient {
 
     fun callCount(i: InstrumentId, u: CandleUnit) = calls[i to u]?.get() ?: 0
     fun totalCalls() = calls.values.sumOf { it.get() }
-    fun reset() { data.clear(); calls.clear(); instruments = emptyList(); tickers = emptyList(); status = StreamStatus(false, null); failures = 0; candleFailures.set(0); gate = null }
+    fun reset() {
+        data.clear(); calls.clear(); instruments = emptyList(); tickers = emptyList(); status = StreamStatus(false, null); failures = 0; candleFailures.set(0); gate = null
+        secondData.clear(); secondCalls.clear(); secondFailures.set(0); downSources = emptySet()
+    }
 
     override fun candles(instrument: InstrumentId, unit: CandleUnit, to: Instant?, count: Int, priority: Priority): List<Candle> {
         calls.getOrPut(instrument to unit) { AtomicInteger() }.incrementAndGet()
@@ -48,16 +67,26 @@ class FakeSource : SourceClient {
         return synchronized(list) { list.filter { to == null || it.start < to }.sortedByDescending { it.start }.take(count) }
     }
 
-    override fun instruments(source: String): List<InstrumentInfo> { failIfAsked(); return instruments }
-    override fun tickers(source: String): List<TickerSnapshot> { failIfAsked(); return tickers }
-    override fun streamStatus(source: String): StreamStatus { failIfAsked(); return status }
+    /** 바이낸스 `/internal/seconds` 의미: 과거→최신, [from] 포함·[to] 배타, 최대 1000초. */
+    override fun seconds(instrument: InstrumentId, from: Instant, to: Instant, priority: Priority): List<SecondCandle> {
+        secondCalls += Triple(instrument, from, to)
+        if (secondFailures.getAndUpdate { if (it > 0) it - 1 else 0 } > 0) throw java.net.ConnectException("source down")
+        val list = secondData[instrument] ?: return emptyList()
+        return synchronized(list) { list.filter { it.start >= from && it.start < to }.sortedBy { it.start }.take(1000) }
+    }
 
-    private fun failIfAsked() {
+    override fun instruments(source: String): List<InstrumentInfo> { failIfAsked(source); return instruments.filter { it.id.source == source } }
+    override fun tickers(source: String): List<TickerSnapshot> { failIfAsked(source); return tickers.filter { it.instrument.source == source } }
+    override fun streamStatus(source: String): StreamStatus { failIfAsked(source); return status }
+
+    private fun failIfAsked(source: String) {
+        if (source in downSources) error("source $source down")
         if (failures > 0) { failures--; error("source down") }
     }
 
     companion object {
         val BTC = InstrumentId.parse("UPBIT:KRW-BTC")
+        val BN = InstrumentId.parse("BINANCE:BTCUSDT")
 
         fun candle(start: Instant, close: String = "100", unit: CandleUnit = CandleUnit.M1, instrument: InstrumentId = BTC, volume: String = "1") = Candle(
             instrument, unit, start, BigDecimal("100"), BigDecimal(close).max(BigDecimal("100")), BigDecimal("90").min(BigDecimal(close)),

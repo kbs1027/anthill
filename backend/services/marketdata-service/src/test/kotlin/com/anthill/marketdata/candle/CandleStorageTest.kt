@@ -66,6 +66,28 @@ class CandleStorageTest : PgTest() {
     }
 
     @Test
+    fun `first coverage added at the same time from many threads does not collide`() {
+        // 행이 아직 없을 때 과거 채우기와 화면 요청이 같은 구간을 동시에 넣던 경우(E2E에서 월봉 500으로 드러남).
+        repeat(5) { round ->
+            val unit = CandleUnit.entries[round]
+            val start = java.util.concurrent.CountDownLatch(1)
+            val errors = java.util.concurrent.ConcurrentLinkedQueue<Throwable>()
+            val threads = (0 until 8).map {
+                Thread.ofVirtual().start {
+                    start.await()
+                    runCatching { coverage.add(btc, unit, t(0), t(10)) }.onFailure { errors += it }
+                }
+            }
+            start.countDown()
+            threads.forEach { it.join() }
+            assertTrue(errors.isEmpty(), "동시 추가에서 오류: ${errors.firstOrNull()}")
+            assertEquals(t(0), coverage.start(btc, unit))
+            assertEquals(t(10), coverage.end(btc, unit))
+        }
+        assertEquals(5, jdbc.sql("select count(*) from coverage").query(Long::class.java).single().toInt())
+    }
+
+    @Test
     fun `coveredStartFor uses exclusive start inclusive end`() {
         coverage.add(btc, CandleUnit.M1, t(10), t(20))
         assertEquals(t(10), coverage.coveredStartFor(btc, CandleUnit.M1, t(20)))
