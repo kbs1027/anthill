@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// 실시간 비교 도구 (spec 8-5). 업비트 웹소켓 candle.1m과 우리 /ws(같은 종목 1m 구독)를 동시에 기록해 판정한다.
-//   지연     : 업비트 분봉 메시지마다, 우리 푸시가 그 거래량에 2초 안에 도달한다.
-//   마감 값  : 우리 closed 푸시 값 = 그 분의 마지막 업비트 메시지 값 (값 기준 비교).
-//   중복 없음: 우리 live 푸시의 거래량이 그 분의 마지막 업비트 거래량을 넘은 적이 없다.
-// 사용: node scripts/compare-live.mjs [--minutes 10] [--markets KRW-BTC,KRW-ETH] [--gateway http://localhost:8080]
+// 실시간 비교 도구 (spec 8-5). 거래소 웹소켓 1분봉과 우리 /ws(같은 종목 1m 구독)를 동시에 기록해 판정한다.
+// 기준은 --source로 고른다: upbit(기본)는 업비트 candle.1m, binance는 바이낸스 kline_1m.
+//   지연     : 거래소 분봉 메시지마다, 우리 푸시가 그 거래량에 2초 안에 도달한다.
+//   마감 값  : 우리 closed 푸시 값 = 그 분의 마지막 거래소 메시지 값 (바이낸스는 마지막 마감(x=true) 메시지, 값 기준 비교).
+//   중복 없음: 우리 live 푸시의 거래량이 그 분의 마지막 거래소 거래량을 넘은 적이 없다.
+// 사용: node scripts/compare-live.mjs [--source upbit|binance] [--minutes 10] [--markets KRW-BTC,KRW-ETH 또는 BTCUSDT,ETHUSDT] [--gateway http://localhost:8080]
 // Node 26 내장 WebSocket·fetch만 쓴다. 숫자는 JSON 원문 그대로 받아 값으로 비교한다(부동소수 변환 없음).
 
 const args = Object.fromEntries(
@@ -11,7 +12,14 @@ const args = Object.fromEntries(
 )
 const MINUTES = Number(args.minutes ?? 10)
 const GATEWAY = (args.gateway ?? 'http://localhost:8080').replace(/\/$/, '')
+const SOURCE = (args.source ?? 'upbit').toLowerCase()
+if (SOURCE !== 'upbit' && SOURCE !== 'binance') {
+  console.error(`--source는 upbit 또는 binance: ${args.source}`)
+  process.exit(2)
+}
+const PREFIX = SOURCE === 'binance' ? 'BINANCE' : 'UPBIT' // 우리 쪽 종목 ID 앞부분
 const UPBIT_WS = 'wss://api.upbit.com/websocket/v1'
+const BINANCE_WS = 'wss://stream.binance.com:9443/stream'
 const LATENCY_MS = 2000
 const WARMUP_MS = 5000
 
@@ -40,16 +48,17 @@ const parseExact = (text) => JSON.parse(text, (_k, v, ctx) => (typeof v === 'num
 
 // ---- 종목 고르기 ---------------------------------------------------------------------
 async function pickMarkets() {
-  if (args.markets) return args.markets.split(',').map((m) => m.trim())
+  if (args.markets) return args.markets.split(',').map((m) => m.trim().toUpperCase())
   const list = await (await fetch(`${GATEWAY}/api/markets`)).json()
-  const traded = list.filter((m) => m.amount24h !== null && cmp(m.amount24h, '0') > 0)
+  // 원화와 USDT 거래대금은 비교할 수 없으므로 고른 거래소 종목 안에서만 순서를 본다
+  const traded = list.filter((m) => m.market.startsWith(`${PREFIX}:`) && m.amount24h !== null && cmp(m.amount24h, '0') > 0)
   const top = traded.slice(0, 3)
   const bottom = traded.slice(-2)
   return [...top, ...bottom].map((m) => m.market.split(':')[1])
 }
 
 // ---- 기록 ------------------------------------------------------------------------------
-const upbit = new Map() // `${code}|${start}` → [{ at, v }]
+const ref = new Map() // 거래소 메시지: `${code}|${start}` → [{ at, closed?, v }]
 const ours = new Map() // `${code}|${start}` → [{ at, state, v }]
 const ourIntervals = new Map() // code → 받은 시각들
 const push = (map, key, rec) => (map.get(key) ?? map.set(key, []).get(key)).push(rec)
@@ -57,12 +66,25 @@ const push = (map, key, rec) => (map.get(key) ?? map.set(key, []).get(key)).push
 function recordUpbit(text) {
   const m = parseExact(text)
   if (!String(m.type).startsWith('candle.1m') || m.stream_type !== 'REALTIME') return
-  push(upbit, `${m.code}|${m.candle_date_time_utc}Z`, {
+  push(ref, `${m.code}|${m.candle_date_time_utc}Z`, {
     at: Date.now(),
     v: {
       open: m.opening_price, high: m.high_price, low: m.low_price, close: m.trade_price,
       volume: m.candle_acc_trade_volume, amount: m.candle_acc_trade_price,
     },
+  })
+}
+
+/** 바이낸스 묶음 스트림 메시지 {stream, data: {e: 'kline', k}}. 시작 시각은 우리 /ws와 같은 꼴(밀리초 없음)로 맞춘다. */
+function recordBinance(text) {
+  const m = parseExact(text)
+  const k = m.data?.k
+  if (m.data?.e !== 'kline' || !k || k.i !== '1m') return
+  const start = new Date(Number(k.t)).toISOString().replace('.000Z', 'Z')
+  push(ref, `${k.s}|${start}`, {
+    at: Date.now(),
+    closed: k.x === true,
+    v: { open: k.o, high: k.h, low: k.l, close: k.c, volume: k.v, amount: k.q },
   })
 }
 
@@ -92,31 +114,32 @@ function open(url, onOpen, onText) {
 function judge(startedAt, endedAt) {
   const latency = [], latencyViolations = [], closedViolations = [], overVolume = []
   let closedChecked = 0
-  for (const [key, msgs] of upbit) {
+  for (const [key, msgs] of ref) {
     const pushes = ours.get(key) ?? []
-    // 지연: 업비트 메시지 거래량에 우리 푸시가 언제 도달했나
+    // 지연: 거래소 메시지 거래량에 우리 푸시가 언제 도달했나
     for (const u of msgs) {
       if (u.at < startedAt + WARMUP_MS || u.at > endedAt - LATENCY_MS - 1000) continue
       const reached = pushes.find((p) => cmp(p.v.volume, u.v.volume) >= 0)
       const lag = reached ? reached.at - u.at : Infinity
       latency.push(lag)
-      if (lag > LATENCY_MS) latencyViolations.push({ key, upbitAt: new Date(u.at).toISOString(), lagMs: lag, volume: u.v.volume })
+      if (lag > LATENCY_MS) latencyViolations.push({ key, refAt: new Date(u.at).toISOString(), lagMs: lag, volume: u.v.volume })
     }
     // 마감 값·중복: 기록 구간 안에서 시작과 마감을 모두 본 분만
     const start = Date.parse(key.split('|')[1])
     if (start < startedAt + 60_000 || start + 75_000 > endedAt) continue
-    const last = msgs.at(-1).v
+    // 그 분의 마지막 메시지. 바이낸스는 마감(x=true) 메시지가 있으면 그것.
+    const last = (msgs.findLast((u) => u.closed) ?? msgs.at(-1)).v
     for (const p of pushes) {
-      if (p.state === 'live' && cmp(p.v.volume, last.volume) > 0) overVolume.push({ key, ours: p.v.volume, upbitLast: last.volume })
+      if (p.state === 'live' && cmp(p.v.volume, last.volume) > 0) overVolume.push({ key, ours: p.v.volume, refLast: last.volume })
     }
     const closed = pushes.filter((p) => p.state === 'closed')
     if (closed.length === 0) continue
     closedChecked++
     for (const c of closed) {
       if (sameValues(c.v, last)) continue
-      // 엄격 판정은 그대로(위반). 참고로 그 뒤 정정 푸시가 화면 값을 업비트와 같게 만들었는지도 남긴다.
+      // 엄격 판정은 그대로(위반). 참고로 그 뒤 정정 푸시가 화면 값을 거래소와 같게 만들었는지도 남긴다.
       const fixedBy = pushes.find((p) => p.at > c.at && p.state === 'corrected' && sameValues(p.v, last))
-      closedViolations.push({ key, ours: c.v, upbitLast: last, correctedLaterMs: fixedBy ? fixedBy.at - c.at : null })
+      closedViolations.push({ key, ours: c.v, refLast: last, correctedLaterMs: fixedBy ? fixedBy.at - c.at : null })
     }
   }
   const finite = latency.filter(Number.isFinite).sort((a, b) => a - b)
@@ -124,7 +147,8 @@ function judge(startedAt, endedAt) {
   const gaps = [...ourIntervals.values()].flatMap((ts) => ts.slice(1).map((t, i) => t - ts[i]))
   const sub1s = gaps.filter((g) => g < 900).length
   return {
-    upbitMessages: [...upbit.values()].reduce((n, l) => n + l.length, 0),
+    source: SOURCE,
+    refMessages: [...ref.values()].reduce((n, l) => n + l.length, 0),
     ourCandleItems: [...ours.values()].reduce((n, l) => n + l.length, 0),
     latency: { checked: latency.length, p50: q(0.5), p95: q(0.95), max: finite.at(-1) ?? null, violations: latencyViolations.length },
     closed: { checked: closedChecked, violations: closedViolations.length },
@@ -136,11 +160,15 @@ function judge(startedAt, endedAt) {
 
 // ---- 실행 ------------------------------------------------------------------------------
 const codes = await pickMarkets()
-console.log(`markets: ${codes.join(', ')} · ${MINUTES} min`)
+console.log(`${SOURCE} markets: ${codes.join(', ')} · ${MINUTES} min`)
 const ourUrl = GATEWAY.replace(/^http/, 'ws') + '/ws'
+const refSocket =
+  SOURCE === 'binance'
+    ? open(`${BINANCE_WS}?streams=${codes.map((c) => `${c.toLowerCase()}@kline_1m`).join('/')}`, () => {}, recordBinance)
+    : open(UPBIT_WS, (ws) => ws.send(JSON.stringify([{ ticket: `anthill-compare-${Date.now()}` }, { type: 'candle.1m', codes }, { format: 'DEFAULT' }])), recordUpbit)
 const sockets = [
-  open(UPBIT_WS, (ws) => ws.send(JSON.stringify([{ ticket: `anthill-compare-${Date.now()}` }, { type: 'candle.1m', codes }, { format: 'DEFAULT' }])), recordUpbit),
-  open(ourUrl, (ws) => codes.forEach((c) => ws.send(JSON.stringify({ op: 'subscribe', market: `UPBIT:${c}`, unit: '1m' }))), recordOurs),
+  refSocket,
+  open(ourUrl, (ws) => codes.forEach((c) => ws.send(JSON.stringify({ op: 'subscribe', market: `${PREFIX}:${c}`, unit: '1m' }))), recordOurs),
 ]
 const startedAt = Date.now()
 const tick = setInterval(() => process.stdout.write(`\r${Math.round((Date.now() - startedAt) / 1000)}s recorded   `), 5000)

@@ -12,7 +12,7 @@ import java.util.logging.Logger
 
 /**
  * 끊긴 사이의 빈 구간을 채운다. 소스 스트림이 다시 연결되거나 marketdata가 시작할 때 부른다.
- * 도는 동안 정기 검사를 멈추고 예산을 복구에 몰아준다. 같은 소스에 대해 동시에 두 번 돌지 않는다.
+ * 도는 동안 그 소스의 정기 검사를 멈추고 예산을 복구에 몰아준다. 같은 소스에 대해 동시에 두 번 돌지 않는다.
  */
 class Recovery(
     private val instruments: InstrumentRepository,
@@ -38,10 +38,10 @@ class Recovery(
         try {
             for (pass in 1..maxPasses) {
                 val failures = try {
-                    reconciler.pause()
+                    reconciler.pause(source)
                     recoverPass(source)
                 } finally {
-                    reconciler.resume()
+                    reconciler.resume(source)
                 }
                 if (failures == 0) break
                 if (pass == maxPasses) {
@@ -55,7 +55,7 @@ class Recovery(
         } finally {
             running.remove(source)
         }
-        backfill.startAsync()
+        backfill.startAsync(source)
     }
 
     /** 한 바퀴. 이미 정착 시점까지 확인한 (종목, 단위)는 건너뛴다. 실패한 수를 돌려준다. */

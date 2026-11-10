@@ -1,0 +1,17 @@
+server.port: 8083
+spring:
+  application.name: binance-adapter
+  threads.virtual.enabled: true
+anthill:
+  binance:
+    rest-base-url: https://api.binance.com
+    ws-url: wss://stream.binance.com:9443/ws
+    # 바이낸스 한도(분당 6000)의 80%. 같은 IP에서 따로 부르는 몫을 남겨 둔다.
+    weight-per-minute: 4800
+    # 웹소켓 연결 하나의 구독 한도(1024)보다 조금 적게.
+    max-streams: 1000
+  stream.enabled: true
+  events.subscribers:
+    - types: [ "market." ]
+      url: http://localhost:8081/internal/events
+management.endpoints.web.exposure.include: health,metrics

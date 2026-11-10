@@ -65,10 +65,10 @@ class RecoveryTest : PgTest() {
         source.gate = gate
         val worker = Thread.ofVirtual().start { recovery.recoverAll("UPBIT") }
         while (source.totalCalls() == 0) Thread.sleep(5)
-        assertTrue(reconciler.paused)
+        assertTrue(reconciler.isPaused("UPBIT"))
         gate.countDown()
         worker.join(5000)
-        assertFalse(reconciler.paused)
+        assertFalse(reconciler.isPaused("UPBIT"))
     }
 
     @Test
@@ -108,5 +108,28 @@ class RecoveryTest : PgTest() {
         val calls = source.totalCalls()
         recovery.recoverAll("UPBIT")
         assertEquals(calls, source.totalCalls())
+    }
+
+    @Test
+    fun `recovery pauses only its source and starts that source's backfill`() {
+        val bn = FakeSource.BN
+        instruments.sync("UPBIT", listOf(InstrumentInfo(BTC, "비트코인", "Bitcoin")), now)
+        instruments.sync("BINANCE", listOf(InstrumentInfo(bn, "BTC", "BTC")), now)
+        // 일봉은 11-01부터만 확인됨 → 과거 채우기가 그 앞을 한 번 요청한다(복구는 일봉을 건드리지 않는다).
+        CandleUnit.entries.forEach { coverage.add(BTC, it, if (it == CandleUnit.DAY) Instant.parse("2026-11-01T00:00:00Z") else Instant.EPOCH, it.floor(gapStart)) }
+        val (reconciler, recovery) = parts()
+        val gate = CountDownLatch(1)
+        source.gate = gate
+        val worker = Thread.ofVirtual().start { recovery.recoverAll("UPBIT") }
+        while (source.totalCalls() == 0) Thread.sleep(5)
+        assertTrue(reconciler.isPaused("UPBIT"))
+        assertFalse(reconciler.isPaused("BINANCE"))
+        gate.countDown()
+        worker.join(5000)
+        val until = System.nanoTime() + 5_000_000_000L
+        while (source.callCount(BTC, CandleUnit.DAY) == 0 && System.nanoTime() < until) Thread.sleep(5)
+        assertEquals(1, source.callCount(BTC, CandleUnit.DAY))
+        Thread.sleep(100)
+        assertEquals(0, CandleUnit.entries.sumOf { source.callCount(bn, it) })
     }
 }

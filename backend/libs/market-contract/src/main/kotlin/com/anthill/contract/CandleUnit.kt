@@ -8,7 +8,7 @@ import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 
-/** 캔들 단위. 경계는 업비트와 같은 UTC 기준(일봉 00:00, 주봉 월요일 00:00, 월봉 1일 00:00). */
+/** 캔들 단위. 경계는 업비트·바이낸스와 같은 UTC 기준(일봉 00:00, 주봉 월요일 00:00, 월봉 1일 00:00). */
 enum class CandleUnit(val code: String, val minutes: Int?) {
     M1("1m", 1), M3("3m", 3), M5("5m", 5), M10("10m", 10), M15("15m", 15),
     M30("30m", 30), M60("60m", 60), M240("240m", 240),

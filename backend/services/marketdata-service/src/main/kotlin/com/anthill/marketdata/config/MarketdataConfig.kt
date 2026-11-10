@@ -11,6 +11,7 @@ import com.anthill.marketdata.candle.CandleSync
 import com.anthill.marketdata.candle.CoverageRepository
 import com.anthill.marketdata.candle.InstrumentRepository
 import com.anthill.marketdata.ingest.InstrumentHandler
+import com.anthill.marketdata.ingest.SecondCandleHandler
 import com.anthill.marketdata.ingest.SourceCandleHandler
 import com.anthill.marketdata.ingest.StreamStatusHandler
 import com.anthill.marketdata.ingest.TickerHandler
@@ -20,6 +21,7 @@ import com.anthill.marketdata.live.ClosedCandlePersister
 import com.anthill.marketdata.live.LiveCandleBook
 import com.anthill.marketdata.live.LiveIngest
 import com.anthill.marketdata.live.LivePublisher
+import com.anthill.marketdata.live.SecondRebuilder
 import com.anthill.marketdata.live.StreamStatusTracker
 import com.anthill.marketdata.live.TickerCache
 import com.anthill.marketdata.live.ViewingTracker
@@ -27,6 +29,7 @@ import com.anthill.marketdata.source.HttpSourceClient
 import com.anthill.marketdata.source.SourceClient
 import com.anthill.marketdata.sync.InitialBackfill
 import com.anthill.marketdata.sync.OutageLog
+import com.anthill.marketdata.sync.ReconcileLoops
 import com.anthill.marketdata.sync.ReconcilePlanner
 import com.anthill.marketdata.sync.Reconciler
 import com.anthill.marketdata.sync.Recovery
@@ -59,8 +62,12 @@ data class EventsProperties(val enabled: Boolean = true, val subscribers: List<S
 @ConfigurationProperties("anthill.live")
 data class LiveProperties(val closeGrace: Duration = Duration.ofSeconds(10))
 
+/** 소스별 정합성 검사 동시 처리 수. 적지 않은 소스는 1. */
+@ConfigurationProperties("anthill.reconcile")
+data class ReconcileProperties(val parallelism: Map<String, Int> = emptyMap())
+
 @Configuration
-@EnableConfigurationProperties(SourcesProperties::class, EventsProperties::class, LiveProperties::class, BackfillProperties::class)
+@EnableConfigurationProperties(SourcesProperties::class, EventsProperties::class, LiveProperties::class, BackfillProperties::class, ReconcileProperties::class)
 class MarketdataConfig {
 
     @Bean
@@ -91,8 +98,13 @@ class MarketdataConfig {
             CandleChangeSink { i, u, up, del -> publisher.getObject().onCorrected(i, u, up, del) },
         )
 
+    /** 1초 캔들이 끊기면 그 종목을 다시 맞춘다. book → rebuilder → book 순환을 지연 조회로 끊는다(persister와 같은 방식). */
     @Bean
-    fun liveCandleBook(clock: Clock, props: LiveProperties, persister: ClosedCandlePersister) = LiveCandleBook(clock, props.closeGrace, persister)
+    fun liveCandleBook(clock: Clock, props: LiveProperties, persister: ClosedCandlePersister, rebuilder: ObjectProvider<SecondRebuilder>) =
+        LiveCandleBook(clock, props.closeGrace, onSecondGap = { i, cut -> rebuilder.getObject().request(i, cut) }, sink = persister)
+
+    @Bean
+    fun secondRebuilder(source: SourceClient, book: LiveCandleBook) = SecondRebuilder(source, book::applyRebuild)
 
     @Bean
     fun tickerCache() = TickerCache()
@@ -116,7 +128,8 @@ class MarketdataConfig {
         instruments: InstrumentRepository, clock: Clock,
     ): EventInbox {
         val handlers: List<EventHandler<*>> = listOf(
-            TradeHandler(book, tracker), SourceCandleHandler(book, tracker), TickerHandler(book, tickers, tracker), StreamStatusHandler(tracker),
+            TradeHandler(book, tracker), SourceCandleHandler(book, tracker), SecondCandleHandler(book, tracker), TickerHandler(book, tickers, tracker),
+            StreamStatusHandler(tracker),
             InstrumentHandler(instruments, clock), ViewingHandler(viewing),
         )
         return EventInbox(handlers, ContractJson.mapper())
@@ -131,8 +144,13 @@ class MarketdataConfig {
     @Bean
     fun reconciler(
         sync: CandleSync, coverage: CoverageRepository, instruments: InstrumentRepository, tickers: TickerCache,
-        viewing: ViewingTracker, outages: OutageLog, meter: MeterRegistry, clock: Clock,
-    ) = Reconciler(ReconcilePlanner(), sync, coverage, instruments, tickers, viewing, outages, meter, clock)
+        viewing: ViewingTracker, outages: OutageLog, meter: MeterRegistry, clock: Clock, reconcile: ReconcileProperties,
+    ) = Reconciler(ReconcilePlanner(), sync, coverage, instruments, tickers, viewing, outages, meter, clock, reconcile.parallelism)
+
+    /** 소스마다 정합성 검사 반복(5초 고정 지연). 앱이 내려가면 Spring이 close()로 멈춘다. */
+    @Bean
+    @ConditionalOnProperty("anthill.jobs.enabled", havingValue = "true")
+    fun reconcileLoops(props: SourcesProperties, reconciler: Reconciler) = ReconcileLoops(props.sources.keys.toList(), reconciler).also { it.start() }
 
     @Bean
     fun initialBackfill(
@@ -145,16 +163,18 @@ class MarketdataConfig {
         backfill: InitialBackfill, outages: OutageLog, clock: Clock,
     ) = Recovery(instruments, coverage, sync, reconciler, backfill, outages, clock)
 
-    /** 시작: 스트림 연결 → 복구, 끊김 → 장애 구간 열기를 걸고, 소스 준비 뒤 복구한다. */
+    /**
+     * 시작: 스트림 연결 → 복구, 끊김 → 장애 구간 열기를 걸고, 소스마다 따로 준비 → 복구(→ 과거 채우기)를 한다.
+     * 한 소스(예: 바이낸스 어댑터)가 안 떠도 다른 소스의 복구는 진행된다.
+     */
     @Bean
     @ConditionalOnProperty("anthill.jobs.enabled", havingValue = "true")
-    fun startupRunner(startup: Startup, tracker: StreamStatusTracker, recovery: Recovery, outages: OutageLog, props: SourcesProperties) = ApplicationRunner {
+    fun startupRunner(startup: Startup, tracker: StreamStatusTracker, recovery: Recovery, outages: OutageLog) = ApplicationRunner {
         tracker.onDisconnected { source, at -> outages.open(source, at) }
         tracker.onConnected { source, _ -> Thread.ofVirtual().name("recovery-$source").start { recovery.recoverAll(source) } }
         // 시작 복구는 연결 알림에 기대지 않고 직접 부른다(리스너를 걸기 전에 알림이 먼저 올 수 있다).
         Thread.ofVirtual().name("startup").start {
-            startup.run()
-            props.sources.keys.forEach { recovery.recoverAll(it) }
+            startup.run { source -> recovery.recoverAll(source) }
         }
     }
 }
@@ -166,7 +186,6 @@ data class BackfillProperties(val minuteDays: Int = 7)
 @ConditionalOnProperty("anthill.jobs.enabled", havingValue = "true")
 class LiveTickSchedule(
     private val publisher: LivePublisher,
-    private val reconciler: Reconciler,
     private val tracker: StreamStatusTracker,
     private val clock: Clock,
 ) {
@@ -176,7 +195,4 @@ class LiveTickSchedule(
     /** 어댑터는 5초마다 상태를 알린다. 20초 동안 아무 소식이 없으면 끊긴 것으로 보고 장애 구간을 연다(리뷰 I5). */
     @Scheduled(fixedRate = 5000)
     fun watchdog() = tracker.expire(clock.instant(), Duration.ofSeconds(20))
-
-    @Scheduled(initialDelay = 5000, fixedDelay = 5000)
-    fun reconcile() = reconciler.runDue()
 }

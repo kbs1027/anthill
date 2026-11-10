@@ -2,6 +2,7 @@ package com.anthill.marketdata.ingest
 
 import com.anthill.contract.EventTypes
 import com.anthill.contract.InstrumentListEvent
+import com.anthill.contract.SecondCandleEvent
 import com.anthill.contract.SourceCandleEvent
 import com.anthill.contract.StreamStatus
 import com.anthill.contract.StreamStatusEvent
@@ -32,6 +33,16 @@ class SourceCandleHandler(private val book: LiveCandleBook, private val tracker:
     override fun handle(key: String, payload: SourceCandleEvent, envelope: EventEnvelope) {
         tracker.touch(payload.candle.instrument.source, envelope.occurredAt)
         book.onCandle(payload)
+    }
+}
+
+/** 바이낸스 1초 캔들. 분 단위 진행 중 캔들을 갱신한다(일·주·월봉은 티커 경로). */
+class SecondCandleHandler(private val book: LiveCandleBook, private val tracker: StreamStatusTracker) : EventHandler<SecondCandleEvent> {
+    override val type = EventTypes.MARKET_SECOND_CANDLE
+    override val payloadType = SecondCandleEvent::class.java
+    override fun handle(key: String, payload: SecondCandleEvent, envelope: EventEnvelope) {
+        tracker.touch(payload.candle.instrument.source, envelope.occurredAt)
+        book.onSecondCandle(payload)
     }
 }
 

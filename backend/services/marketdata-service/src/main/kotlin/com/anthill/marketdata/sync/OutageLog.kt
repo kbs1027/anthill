@@ -21,10 +21,14 @@ class OutageLog(private val jdbc: JdbcClient) {
         jdbc.sql("update outage set to_at = :to where source = :s and to_at is null").param("s", source).param("to", utc(to)).update()
     }
 
-    /** [from, to)와 겹치는 장애 구간. 아직 열려 있으면 끝을 [to]로 본다. */
-    fun windows(from: Instant, to: Instant): List<Pair<Instant, Instant>> =
-        jdbc.sql("select from_at, to_at from outage where from_at < :to and (to_at is null or to_at > :from) order by from_at")
+    /** [from, to)와 겹치는 장애 구간. 아직 열려 있으면 끝을 [to]로 본다. [source]를 주면 그 소스 것만. */
+    fun windows(from: Instant, to: Instant, source: String? = null): List<Pair<Instant, Instant>> =
+        jdbc.sql(
+            "select from_at, to_at from outage where from_at < :to and (to_at is null or to_at > :from)" +
+                (if (source != null) " and source = :s" else "") + " order by from_at",
+        )
             .param("from", utc(from)).param("to", utc(to))
+            .let { if (source != null) it.param("s", source) else it }
             .query { rs, _ -> rs.getObject(1, OffsetDateTime::class.java).toInstant() to (rs.getObject(2, OffsetDateTime::class.java)?.toInstant() ?: to) }
             .list()
 }

@@ -15,6 +15,9 @@ data class SourceCandleEvent(val candle: Candle, val lastTradeAt: Instant, val s
 
 data class TickerEvent(val ticker: TickerSnapshot)
 
+/** 마감된 1초 캔들 하나. 1초 캔들을 주는 소스(바이낸스)만 보낸다. */
+data class SecondCandleEvent(val candle: SecondCandle)
+
 data class StreamStatusEvent(val source: String, val connected: Boolean, val at: Instant)
 
 data class InstrumentListEvent(val source: String, val instruments: List<InstrumentInfo>)
@@ -35,6 +38,7 @@ data class ViewingEvent(val gatewayId: String, val instruments: Set<InstrumentId
 object EventTypes {
     const val MARKET_TRADE = "market.trade.v1"
     const val MARKET_CANDLE = "market.candle.v1"
+    const val MARKET_SECOND_CANDLE = "market.second-candle.v1"
     const val MARKET_TICKER = "market.ticker.v1"
     const val MARKET_STREAM_STATUS = "market.stream-status.v1"
     const val MARKET_INSTRUMENT = "market.instrument.v1"

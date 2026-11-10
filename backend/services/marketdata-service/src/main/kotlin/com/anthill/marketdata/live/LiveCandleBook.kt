@@ -1,9 +1,12 @@
 package com.anthill.marketdata.live
 
 import com.anthill.contract.Candle
+import com.anthill.contract.CandleMerge
 import com.anthill.contract.CandleState
 import com.anthill.contract.CandleUnit
 import com.anthill.contract.InstrumentId
+import com.anthill.contract.SecondCandle
+import com.anthill.contract.SecondCandleEvent
 import com.anthill.contract.SourceCandleEvent
 import com.anthill.contract.TickerSnapshot
 import com.anthill.contract.TradeEvent
@@ -11,6 +14,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.TreeMap
+import java.util.logging.Logger
 
 fun interface ClosedCandleSink {
     /** [late]: 이미 닫은 칸에 대해 늦게 온 업비트 값. 저장소가 확인 전이면 저장하고 화면에 정정으로 보낸다. */
@@ -27,8 +31,22 @@ data class LiveUpdate(val instrument: InstrumentId, val unit: CandleUnit, val st
  * 같은 체결 순번(sequential_id)은 한 번만 반영하고, 이미 반영한 업비트 분봉 값에 들어 있는 체결(그 값의 마지막 체결 시각 이하)도 더하지 않는다.
  * 이미 끝난 칸(끝 + [closeGrace]가 지남)은 다시 열지 않는다. 그 칸에 대한 업비트 값은 늦은 값으로 [ClosedCandleSink]에 넘기고,
  * 저장소가 확인 전이면 저장하고 화면에 정정으로 보낸다. 지난 날짜 티커는 무시한다.
+ *
+ * 바이낸스 경로(1초 캔들):
+ * - 분 단위: 마감된 1초 캔들을 [CandleMerge.merge]로 칸에 더한다. 종목마다 마지막으로 반영한 초를 기억하고, 같거나 이른 초는 버린다.
+ *   거래 없는 초는 값을 바꾸지 않아 화면에 보내지 않는다(칸이 없을 때만 그 초로 칸을 연다).
+ * - 처음 받은 초이거나 초가 건너뛰어졌으면(끊김) [onSecondGap]으로 다시 맞추기를 맡긴다. 그동안 받은 초는 계속 반영하면서 따로 모아 두고,
+ *   [applyRebuild]가 소스 REST 조각(1분봉 + 1초 캔들)과 모아 둔 초로 칸을 다시 계산해 바꾼다. 그사이 마감된 칸은 늦은 값으로 넘긴다.
+ * - 일·주·월봉은 업비트와 같은 티커 경로를 쓴다.
  */
-class LiveCandleBook(private val clock: Clock, private val closeGrace: Duration, private val sink: ClosedCandleSink) {
+class LiveCandleBook(
+    private val clock: Clock,
+    private val closeGrace: Duration,
+    /** 1초 캔들이 처음 왔거나 끊겼을 때 (종목, 끊긴 뒤 첫 초)로 부른다. 기존 호출(끝 람다 = [sink])이 그대로 되도록 [sink] 앞에 둔다. */
+    private val onSecondGap: (InstrumentId, Instant) -> Unit = { _, _ -> },
+    private val sink: ClosedCandleSink,
+) {
+    private val log = Logger.getLogger(LiveCandleBook::class.java.name)
 
     private class Slot(var display: Candle, var authoritative: Candle?, var lastTradeAt: Instant?, var upbitAt: Instant?)
 
@@ -41,6 +59,12 @@ class LiveCandleBook(private val clock: Clock, private val closeGrace: Duration,
     private val pendingLive = LinkedHashMap<Pair<InstrumentId, CandleUnit>, LiveUpdate>()
     private val pendingClosed = ArrayList<LiveUpdate>()
     private val lastClosed = HashMap<Pair<InstrumentId, CandleUnit>, Closed>()
+
+    /** 다시 맞추기를 기다리는 종목: 끊긴 뒤 첫 초([cut])와 그 뒤로 받은 초. */
+    private class Rebuild(val cut: Instant, val seconds: ArrayList<SecondCandle> = ArrayList())
+
+    private val lastSecond = HashMap<InstrumentId, Instant>()
+    private val rebuilds = HashMap<InstrumentId, Rebuild>()
 
     @Synchronized
     fun seedClosedDays(i: InstrumentId, days: List<Candle>) {
@@ -138,6 +162,98 @@ class LiveCandleBook(private val clock: Clock, private val closeGrace: Duration,
         recomputePeriods(t.instrument, day)
     }
 
+    /** 마감된 1초 캔들 하나(바이낸스). 분 단위 8칸을 갱신한다. */
+    @Synchronized
+    fun onSecondCandle(e: SecondCandleEvent) {
+        val s = e.candle
+        val i = s.instrument
+        val last = lastSecond[i]
+        if (last != null && !s.start.isAfter(last)) return   // 중복이거나 늦게 온 초
+        lastSecond[i] = s.start
+        if (last == null || s.start != last.plusSeconds(1)) {
+            // 처음 받았거나 끊겼다: 새 다시 맞추기로 바꾼다(전에 기다리던 것은 이 초 기준으로 다시 받는다).
+            rebuilds[i] = Rebuild(s.start)
+            onSecondGap(i, s.start)
+        }
+        rebuilds[i]?.let { r ->
+            r.seconds += s
+            if (r.seconds.size > REBUILD_BUFFER_LIMIT) {
+                rebuilds.remove(i)
+                log.warning("다시 맞추기가 너무 늦어 포기한다: $i (끊긴 시각 ${r.cut})")
+            }
+        }
+        for (u in MINUTE_UNITS) {
+            val key = i to u
+            val bucket = u.floor(s.start)
+            if (ended(u, bucket)) continue
+            val piece = s.toCandle(u, bucket)
+            val slot = slots[key]
+            when {
+                slot == null -> open(key, piece, null, s.start, null)
+                bucket < slot.display.start -> Unit
+                bucket == slot.display.start -> {
+                    slot.lastTradeAt = s.start
+                    val next = CandleMerge.merge(slot.display, piece)
+                    if (!next.sameValuesAs(slot.display)) {
+                        slot.display = next
+                        markLive(key, next)
+                    }
+                }
+                else -> {
+                    close(key, slot)
+                    open(key, piece, null, s.start, null)
+                }
+            }
+        }
+    }
+
+    /**
+     * 끊긴 뒤 다시 맞추기 결과. [minutes]는 4시간 칸 시작부터 [cut]이 속한 분 시작까지의 1분봉, [seconds]는 그 분 시작부터 [cut] 직전까지의 1초 캔들.
+     * 이 조각들과 [cut] 이후 모아 둔 초를 차례로 합쳐 칸마다 값을 다시 만든다. 지금 열린 칸은 그 값으로 바꾸고, 그사이 마감된 칸은 늦은 값으로 넘긴다.
+     * 이 종목이 그 [cut]으로 기다리는 중이 아니면(더 새 끊김이 생겼거나 포기했으면) 아무것도 하지 않는다.
+     */
+    @Synchronized
+    fun applyRebuild(i: InstrumentId, cut: Instant, minutes: List<Candle>, seconds: List<SecondCandle>) {
+        val r = rebuilds[i]
+        if (r == null || r.cut != cut) return
+        rebuilds.remove(i)
+        val minuteStart = CandleUnit.M1.floor(cut)
+        val pieces = ArrayList<Pair<Instant, (CandleUnit, Instant) -> Candle>>()
+        minutes.filter { it.unit == CandleUnit.M1 && it.start >= CandleUnit.M240.floor(cut) && it.start < minuteStart }
+            .sortedBy { it.start }
+            .forEach { m -> pieces += m.start to { u, b -> m.copy(unit = u, start = b) } }
+        (seconds.filter { it.start >= minuteStart && it.start < cut }.sortedBy { it.start } + r.seconds)
+            .forEach { s -> pieces += s.start to { u, b -> s.toCandle(u, b) } }
+        for (u in MINUTE_UNITS) {
+            val first = u.floor(cut)
+            // 칸 시작 → (다시 계산한 값, 그 칸 마지막 조각 시각)
+            val rebuilt = TreeMap<Instant, Pair<Candle, Instant>>()
+            for ((at, toCandle) in pieces) {
+                val bucket = u.floor(at)
+                if (bucket < first) continue
+                val piece = toCandle(u, bucket)
+                rebuilt[bucket] = (rebuilt[bucket]?.let { CandleMerge.merge(it.first, piece) } ?: piece) to at
+            }
+            val key = i to u
+            for ((bucket, value) in rebuilt) {
+                val (c, at) = value
+                val slot = slots[key]
+                when {
+                    slot != null && bucket == slot.display.start -> if (!c.sameValuesAs(slot.display)) {
+                        slot.display = c
+                        markLive(key, c)
+                    }
+                    slot != null && bucket > slot.display.start && !ended(u, bucket) -> {
+                        close(key, slot)
+                        open(key, c, null, at, null)
+                    }
+                    slot == null && !ended(u, bucket) -> open(key, c, null, at, null)
+                    else -> late(key, c, at)
+                }
+            }
+        }
+    }
+
     @Synchronized
     fun sweep(now: Instant) {
         val due = slots.filter { (key, slot) -> !key.second.next(slot.display.start).plus(closeGrace).isAfter(now) }
@@ -228,5 +344,7 @@ class LiveCandleBook(private val clock: Clock, private val closeGrace: Duration,
     companion object {
         val MINUTE_UNITS = CandleUnit.entries.filter { it.minutes != null }
         private const val SEEN_LIMIT = 10_000
+        /** 다시 맞추기를 기다리며 모아 두는 초의 최대 수(10분). 넘으면 다시 맞추기를 포기한다. */
+        const val REBUILD_BUFFER_LIMIT = 600
     }
 }

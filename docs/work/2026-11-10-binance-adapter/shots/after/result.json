@@ -1,0 +1,68 @@
+{
+  "mode": "after",
+  "startedAt": "2026-11-10T17:24:40.551Z",
+  "steps": [
+    {
+      "n": "01",
+      "name": "first-screen",
+      "status": "pass",
+      "shot": "01-first-screen.png"
+    },
+    {
+      "n": "02",
+      "name": "live-every-second",
+      "status": "pass",
+      "shot": "02-live-every-second.png"
+    },
+    {
+      "n": "03",
+      "name": "ten-minute",
+      "status": "pass",
+      "shot": "03-ten-minute.png"
+    },
+    {
+      "n": "04",
+      "name": "day-week-month",
+      "status": "pass",
+      "shot": "04-day-week-month.png"
+    },
+    {
+      "n": "05",
+      "name": "quiet-symbol",
+      "status": "pass",
+      "shot": "05-quiet-symbol.png"
+    },
+    {
+      "n": "06",
+      "name": "search-symbol",
+      "status": "pass",
+      "shot": "06-search-symbol.png"
+    },
+    {
+      "n": "07",
+      "name": "crosshair-vs-binance",
+      "status": "pass",
+      "shot": "07-crosshair-vs-binance.png"
+    },
+    {
+      "n": "08",
+      "name": "scroll-back",
+      "status": "pass",
+      "shot": "08-scroll-back.png"
+    },
+    {
+      "n": "09",
+      "name": "upbit-still-works",
+      "status": "pass",
+      "shot": "09-upbit-still-works.png"
+    },
+    {
+      "n": "10",
+      "name": "after-reconnect",
+      "status": "pass",
+      "shot": "10-after-reconnect.png"
+    }
+  ],
+  "pageErrors": [],
+  "finishedAt": "2026-11-10T17:25:52.698Z"
+}

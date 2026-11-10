@@ -1,0 +1,89 @@
+binance markets: USDCUSDT, BTCUSDT, ETHUSDT, ZMBUSDT, JPMBUSDT · 5 min
+5s recorded   10s recorded   15s recorded   20s recorded   25s recorded   30s recorded   35s recorded   40s recorded   45s recorded   50s recorded   55s recorded   60s recorded   65s recorded   70s recorded   75s recorded   80s recorded   85s recorded   90s recorded   95s recorded   100s recorded   105s recorded   110s recorded   115s recorded   120s recorded   125s recorded   130s recorded   135s recorded   140s recorded   145s recorded   150s recorded   155s recorded   160s recorded   165s recorded   170s recorded   175s recorded   180s recorded   185s recorded   190s recorded   195s recorded   200s recorded   205s recorded   210s recorded   215s recorded   220s recorded   225s recorded   230s recorded   235s recorded   240s recorded   245s recorded   250s recorded   255s recorded   260s recorded   265s recorded   270s recorded   275s recorded   280s recorded   285s recorded   290s recorded   295s recorded   
+{
+  "source": "binance",
+  "refMessages": 480,
+  "ourCandleItems": 845,
+  "latency": {
+    "checked": 467,
+    "p50": 1150,
+    "p95": 1836,
+    "max": 2270,
+    "violations": 12
+  },
+  "closed": {
+    "checked": 10,
+    "violations": 0
+  },
+  "duplicates": {
+    "violations": 0
+  },
+  "pushGapsUnder900ms": 100,
+  "details": {
+    "latencyViolations": [
+      {
+        "key": "BTCUSDT|2026-11-10T17:26:00Z",
+        "refAt": "2026-11-10T17:26:52.008Z",
+        "lagMs": 2095,
+        "volume": "14.07531000"
+      },
+      {
+        "key": "ZMBUSDT|2026-11-10T17:26:00Z",
+        "refAt": "2026-11-10T17:26:58.069Z",
+        "lagMs": 2186,
+        "volume": "0.00000000"
+      },
+      {
+        "key": "JPMBUSDT|2026-11-10T17:26:00Z",
+        "refAt": "2026-11-10T17:26:58.070Z",
+        "lagMs": 2185,
+        "volume": "0.00000000"
+      },
+      {
+        "key": "ETHUSDT|2026-11-10T17:27:00Z",
+        "refAt": "2026-11-10T17:27:46.080Z",
+        "lagMs": 2104,
+        "volume": "114.10690000"
+      },
+      {
+        "key": "BTCUSDT|2026-11-10T17:28:00Z",
+        "refAt": "2026-11-10T17:28:52.076Z",
+        "lagMs": 2180,
+        "volume": "77.80547000"
+      },
+      {
+        "key": "ETHUSDT|2026-11-10T17:28:00Z",
+        "refAt": "2026-11-10T17:28:04.009Z",
+        "lagMs": 2234,
+        "volume": "26.85720000"
+      },
+      {
+        "key": "BTCUSDT|2026-11-10T17:29:00Z",
+        "refAt": "2026-11-10T17:29:16.069Z",
+        "lagMs": 2088,
+        "volume": "1.02114000"
+      },
+      {
+        "key": "ETHUSDT|2026-11-10T17:29:00Z",
+        "refAt": "2026-11-10T17:29:34.018Z",
+        "lagMs": 2143,
+        "volume": "849.51740000"
+      },
+      {
+        "key": "BTCUSDT|2026-11-10T17:30:00Z",
+        "refAt": "2026-11-10T17:30:14.028Z",
+        "lagMs": 2116,
+        "volume": "1.00785000"
+      },
+      {
+        "key": "ETHUSDT|2026-11-10T17:30:00Z",
+        "refAt": "2026-11-10T17:30:14.028Z",
+        "lagMs": 2116,
+        "volume": "64.69320000"
+      }
+    ],
+    "closedViolations": [],
+    "overVolume": []
+  }
+}
+FAIL: 12 violations

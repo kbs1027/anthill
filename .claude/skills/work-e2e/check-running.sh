@@ -15,7 +15,7 @@ else
 fi
 
 echo "포트:"
-for port in 3000 5173 8080 8081 8082 5432; do
+for port in 3000 5173 8080 8081 8082 8083 5432; do
   owner=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $1 " (pid " $2 ")"}')
   if [ -n "$owner" ]; then
     found=1

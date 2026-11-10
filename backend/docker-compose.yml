@@ -1,4 +1,4 @@
-# 백엔드: DB + 세 서비스. 화면까지 함께 띄우려면 저장소 최상위의 docker-compose.yml을 쓴다.
+# 백엔드: DB + 네 서비스. 화면까지 함께 띄우려면 저장소 최상위의 docker-compose.yml을 쓴다.
 # 전체 실행: docker compose up -d --build      DB만: docker compose up -d db      멈춤: docker compose down
 #
 # name을 anthill로 고정한다. 폴더 이름(backend)으로 정해지면 기존 anthill_pgdata 볼륨을 찾지 못한다.
@@ -38,6 +38,21 @@ services:
       - "8082:8082"
     restart: unless-stopped
 
+  # 바이낸스는 미국 IP를 막는다(HTTP 451). 그런 곳에서는 이 어댑터만 5초마다 다시 시도하고, 업비트는 그대로 돈다.
+  binance-adapter:
+    build:
+      context: .
+      args:
+        SERVICE: binance-adapter
+    image: anthill/binance-adapter:dev
+    environment:
+      SPRING_PROFILES_ACTIVE: dev   # /admin/stream/pause (끊김 복구 시험용)
+      SPRING_APPLICATION_JSON: >-
+        {"anthill":{"events":{"subscribers":[{"types":["market."],"url":"http://marketdata-service:8081/internal/events"}]}}}
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+
   marketdata-service:
     build:
       context: .
@@ -50,7 +65,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/anthill
       SPRING_APPLICATION_JSON: >-
-        {"anthill":{"sources":{"UPBIT":"http://upbit-adapter:8082"},
+        {"anthill":{"sources":{"UPBIT":"http://upbit-adapter:8082","BINANCE":"http://binance-adapter:8083"},
         "events":{"subscribers":[{"types":["chart."],"url":"http://edge-gateway:8080/internal/events"}]}}}
     ports:
       - "8081:8081"

@@ -9,7 +9,7 @@ const LABELS: Record<UnitCode, string> = {
 }
 
 export default function App() {
-  const [market, setMarket] = useState('UPBIT:KRW-BTC')
+  const [market, setMarket] = useState('BINANCE:BTCUSDT')
   const [unit, setUnit] = useState<UnitCode>('1m')
   const [names, setNames] = useState<Record<string, string>>({})
   const symbol = market.split(':')[1] ?? market
