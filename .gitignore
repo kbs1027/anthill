@@ -10,3 +10,7 @@ build/
 .kotlin/
 node_modules/
 dist/
+
+# Claude Code: 작업용 worktree와 개인 설정은 올리지 않는다
+.claude/worktrees/
+.claude/settings.local.json

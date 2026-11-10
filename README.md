@@ -103,6 +103,26 @@ node scripts/compare-live.mjs --minutes 10
 
 대조 도구는 값 불일치(`MISMATCH`)와 함께 한 번도 확인하지 않은 (종목, 단위)(`UNCOVERED`), 확인이 시한을 넘긴 것(`OVERDUE`)도 보고하고, 하나라도 있으면 종료 코드 1이다.
 
+## 작업 방식
+
+- 작업은 최신 main에서 만든 worktree 안에서 하고, main에는 PR로만 합친다(직접 푸시 금지). 규칙은 [`CLAUDE.md`](CLAUDE.md)에 있다.
+- 저장소를 받은 뒤 한 번, main 직접 푸시를 막는 git 훅을 켠다.
+
+  ```bash
+  git config core.hooksPath .githooks
+  ```
+
+- Claude Code에서 `/work <작업 설명>`을 치면 아래 단계를 처음부터 끝까지 순서대로 진행한다. 단계 하나만 하려면 그 단계의 명령을 친다. 절차는 [`.claude/skills/`](.claude/skills/)의 단계별 폴더에, 산출물은 `docs/work/<날짜>-<작업이름>/`에 쌓인다.
+
+  | 명령 | 하는 일 |
+  |---|---|
+  | `/work-start` | main을 최신으로 받고 worktree를 만든다 |
+  | `/work-plan` | 계획서(로직·ER 다이어그램)를 쓰고 확정을 기다린다 |
+  | `/work-implement` | 확정된 계획대로 구현한다. 화면을 바꾸는 작업이면 고치기 전 화면을 먼저 캡처한다 |
+  | `/work-test` | 테스트할 목록을 확인받고 테스트 코드를 쓴다 |
+  | `/work-e2e` | 전체를 띄워 실제 사용자처럼 확인하고 화면을 캡처한다 |
+  | `/work-report` | 캡처한 화면으로 보고서를 쓴다(변경은 전·후 비교) |
+
 ## 알아 둘 것
 
 - 서비스 사이 `/internal/*`에는 인증이 없다. 공개 운영 전에 `/internal/**`가 인터넷에서 닿지 않게 해야 한다(별도 포트나 네트워크 정책).
