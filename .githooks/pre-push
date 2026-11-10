@@ -1,0 +1,12 @@
+#!/bin/sh
+# main으로 직접 푸시하지 못하게 막는다. 작업 브랜치를 푸시하고 PR로 합친다.
+# 켜는 법(저장소를 받은 뒤 한 번): git config core.hooksPath .githooks
+# git이 stdin으로 "<내 ref> <내 sha> <원격 ref> <원격 sha>"를 한 줄씩 준다.
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    echo "막음: main에는 직접 푸시할 수 없습니다. 작업 브랜치를 푸시하고 PR을 여세요." >&2
+    exit 1
+  fi
+done
+exit 0
