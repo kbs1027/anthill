@@ -1,0 +1,2 @@
+열린 시각 기준 받은 메시지: 1251ms {"type":"ping"}, 2248ms {"type":"ping"}, 3495ms {"type":"ping"}, 4496ms {"type":"ping"}, 5748ms {"type":"ping"}
+ping 5개, 메시지 사이 간격: 997, 1247, 1001, 1252ms

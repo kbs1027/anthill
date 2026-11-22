@@ -12,6 +12,8 @@ anthill:
   ws:
     allowed-origins: [ "*" ]
     max-subscriptions: 50
+    # 이만큼 보낸 게 없는 연결에 ping을 보낸다. 브라우저는 3초 무소식이면 끊긴 것으로 보고 다시 연결한다.
+    heartbeat-idle: 1s
   events.subscribers:
     - types: [ "realtime." ]
       url: http://localhost:8081/internal/events

@@ -8,6 +8,7 @@ import com.anthill.eventbus.HttpEventTransport
 import com.anthill.eventbus.Subscriber
 import com.anthill.gateway.realtime.CandleUpdateHandler
 import com.anthill.gateway.realtime.GatewayFanout
+import com.anthill.gateway.realtime.HeartbeatTicker
 import com.anthill.gateway.realtime.StreamWebSocketHandler
 import com.anthill.gateway.realtime.SubscriptionRegistry
 import com.anthill.gateway.realtime.TickerUpdateHandler
@@ -19,15 +20,23 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import java.net.URI
 import java.time.Clock
+import java.time.Duration
 
 @ConfigurationProperties("anthill.events")
 data class EventsProperties(val enabled: Boolean = true, val subscribers: List<SubscriberProperties> = emptyList()) {
     data class SubscriberProperties(val types: List<String>, val url: URI)
 }
 
-/** `/ws` 설정. 공개 읽기 전용 시세라 인증·쿠키가 없어 출처는 기본으로 모두 허용한다. */
+/**
+ * `/ws` 설정. 공개 읽기 전용 시세라 인증·쿠키가 없어 출처는 기본으로 모두 허용한다.
+ * [heartbeatIdle]: 이만큼 보낸 게 없는 연결에 ping을 보낸다(브라우저는 3초 무소식이면 다시 연결한다).
+ */
 @ConfigurationProperties("anthill.ws")
-data class WsProperties(val allowedOrigins: List<String> = listOf("*"), val maxSubscriptions: Int = 50)
+data class WsProperties(
+    val allowedOrigins: List<String> = listOf("*"),
+    val maxSubscriptions: Int = 50,
+    val heartbeatIdle: Duration = Duration.ofSeconds(1),
+)
 
 @Configuration
 @EnableConfigurationProperties(EventsProperties::class, WsProperties::class)
@@ -51,7 +60,11 @@ class GatewayConfig {
     fun subscriptionRegistry(ws: WsProperties) = SubscriptionRegistry(ws.maxSubscriptions)
 
     @Bean
-    fun streamWebSocketHandler(registry: SubscriptionRegistry) = StreamWebSocketHandler(registry)
+    fun streamWebSocketHandler(registry: SubscriptionRegistry, clock: Clock, ws: WsProperties) =
+        StreamWebSocketHandler(registry, clock = clock, heartbeatIdle = ws.heartbeatIdle)
+
+    @Bean
+    fun heartbeatTicker(handler: StreamWebSocketHandler) = HeartbeatTicker(handler)
 
     @Bean
     fun gatewayFanout(registry: SubscriptionRegistry, handler: StreamWebSocketHandler) = GatewayFanout(registry, handler::send)
