@@ -1,0 +1,48 @@
+{
+  "mode": "after",
+  "startedAt": "2026-11-22T03:34:05.028Z",
+  "steps": [
+    {
+      "n": "01",
+      "name": "first-screen",
+      "status": "pass",
+      "shot": "01-first-screen.png"
+    },
+    {
+      "n": "02",
+      "name": "idle-ping",
+      "status": "pass"
+    },
+    {
+      "n": "03",
+      "name": "steady-2min",
+      "status": "pass",
+      "shot": "03-steady-2min.png"
+    },
+    {
+      "n": "04",
+      "name": "half-open-pause",
+      "status": "pass",
+      "shot": "04-half-open-pause.png"
+    },
+    {
+      "n": "05",
+      "name": "gateway-restart",
+      "status": "pass",
+      "shot": "05-gateway-restart.png"
+    },
+    {
+      "n": "06",
+      "name": "network-online",
+      "status": "pass",
+      "shot": "06-network-online.png"
+    },
+    {
+      "n": "07",
+      "name": "no-page-errors",
+      "status": "pass"
+    }
+  ],
+  "pageErrors": [],
+  "finishedAt": "2026-11-22T03:36:51.053Z"
+}

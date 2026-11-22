@@ -50,9 +50,21 @@ export function MarketList({ selected, onSelect, onLoaded }: Props) {
         }),
       )
     })
+    // 끊긴 동안 놓친 가격은 다시 붙은 뒤 목록을 새로 받아 맞춘다. 실패하면 다음 시세 갱신에 맡긴다.
+    // 처음 받기가 실패해 오류가 떠 있었어도 여기서 받으면 목록이 돌아온다.
+    const offReconnect = stream.onReconnect(() => {
+      fetchMarkets()
+        .then((list) => {
+          if (cancelled) return
+          setMarkets(list)
+          setStatus('ready')
+        })
+        .catch(() => {})
+    })
     return () => {
       cancelled = true
       off()
+      offReconnect()
     }
   }, [])
 
